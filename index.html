@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设备管理系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="./source/data.js" onerror="window.__SOURCE_DATA__ = null; console.log('source/data.js not found, using localStorage')"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #1a73e8; --primary-dark: #1557b0; --primary-light: #e8f0fe;
+            --success: #34a853; --warning: #f9ab00; --danger: #ea4335;
+            --text: #1f1f1f; --text-secondary: #5f6368; --text-tertiary: #9aa0a6;
+            --bg: #f0f2f5; --card-bg: #ffffff; --border: #e0e0e0; --border-light: #f0f0f0;
+            --sidebar-w: 240px; --radius: 10px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+            --shadow-hover: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; }
+        .app { display: flex; min-height: 100vh; }
+        .sidebar { width: var(--sidebar-w); background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%); color: #cbd5e1; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; display: flex; flex-direction: column; transition: transform 0.3s; }
+        .sidebar-header { padding: 20px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: center; }
+        .sidebar-header .logo { font-size: 22px; font-weight: 700; color: #fff; }
+        .sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+        .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 8px; cursor: pointer; color: #94a3b8; font-size: 13px; margin-bottom: 2px; transition: all 0.2s; }
+        .nav-item:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
+        .nav-item.active { background: var(--primary); color: #fff; }
+        .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+        .nav-badge { margin-left: auto; background: var(--danger); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center; }
+        .nav-badge.hidden { display: none; }
+        .sidebar-footer { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 11px; color: #475569; }
+        .sidebar-cloud { padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; }
+        .sidebar-cloud .cloud-dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; flex-shrink: 0; }
+        .sidebar-cloud .cloud-dot.ok { background: #34a853; }
+        .sidebar-cloud .cloud-dot.warn { background: #f9ab00; }
+        .sidebar-cloud .cloud-dot.err { background: #ea4335; }
+        .sidebar-cloud .cloud-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sidebar-cloud .cloud-refresh { background: none; border: 1px solid #334155; color: #94a3b8; border-radius: 4px; cursor: pointer; font-size: 14px; padding: 1px 7px; line-height: 1.4; }
+        .sidebar-cloud .cloud-refresh:hover { color: #fff; border-color: #64748b; }
+        .main { flex: 1; margin-left: var(--sidebar-w); padding: 24px; min-width: 0; }
+        .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+        .topbar h1 { font-size: 22px; font-weight: 700; }
+        .topbar-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .topbar-date { color: var(--text-secondary); font-size: 13px; }
+        .dashboard-topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        .dashboard-topbar-left, .dashboard-topbar-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .dashboard-topbar .filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 0; }
+        .dashboard-date-input { display: none; padding: 5px 8px; font-size: 12px; border: 1px solid var(--border); border-radius: 4px; }
+        .dashboard-date-separator { display: none; color: #9aa0a6; font-size: 12px; }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--card-bg); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 16px; transition: box-shadow 0.2s, transform 0.15s; }
+        .stat-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+        .stat-icon { width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+        .stat-icon.blue { background: #e8f0fe; color: var(--primary); }
+        .stat-icon.green { background: #e6f4ea; color: var(--success); }
+        .stat-icon.yellow { background: #fef7e0; color: var(--warning); }
+        .stat-icon.red { background: #fce8e6; color: var(--danger); }
+        .stat-info .value { font-size: 28px; font-weight: 700; line-height: 1.2; }
+        .stat-info .label { font-size: 12px; color: var(--text-secondary); }
+        .panel { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 24px; overflow: hidden; }
+        .panel-header { padding: 16px 20px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; }
+        .panel-title { font-size: 15px; font-weight: 600; }
+        .panel-body { padding: 20px; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 10px 12px; background: #f8f9fa; border-bottom: 2px solid var(--border-light); color: var(--text-secondary); font-weight: 600; white-space: nowrap; position: sticky; top: 0; }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); white-space: nowrap; }
+        tbody tr:hover { background: #f8f9ff; }
+        .table-empty { text-align: center; padding: 40px; color: var(--text-tertiary); }
+        .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+        .badge-normal { background: #e6f4ea; color: #137333; }
+        .badge-warning { background: #fef7e0; color: #b06000; }
+        .badge-danger { background: #fce8e6; color: #c5221f; }
+        .badge-maintenance { background: #e8f0fe; color: #174ea6; }
+        .badge-scrapped { background: #f1f3f4; color: #5f6368; }
+        .badge-idle { background: #f3e8fd; color: #7c1fa2; }
+        .badge-outsource { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+        .status-badge-normal { background: #e6f4ea; color: #137333; }
+        .status-badge-maintenance { background: #e8f0fe; color: #174ea6; }
+        .status-badge-repair { background: #fce8e6; color: #c5221f; }
+        .status-badge-outsource { background: #fff3e0; color: #e65100; }
+        .status-badge-pending { background: #fef7e0; color: #b06000; }
+        .status-badge-idle { background: #f3e8fd; color: #7c1fa2; }
+        .status-badge-scrapped { background: #f1f3f4; color: #5f6368; }
+        .level-badge-light { background: #e6f4ea; color: #137333; }
+        .level-badge-normal { background: #e8f0fe; color: #174ea6; }
+        .level-badge-serious { background: #fef7e0; color: #b06000; }
+        .level-badge-urgent { background: #fce8e6; color: #c5221f; }
+        .btn { padding: 7px 16px; border-radius: 6px; border: none; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-family: inherit; transition: all 0.15s; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-outline { background: #fff; color: var(--text-secondary); border: 1px solid var(--border); }
+        .btn-outline:hover { background: #f8f9fa; border-color: var(--text-tertiary); }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-danger:hover { background: #c5221f; }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-success:hover { background: #2d9449; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-icon { width: 30px; height: 30px; padding: 0; justify-content: center; border-radius: 6px; border: 1px solid var(--border); background: #fff; color: var(--text-secondary); cursor: pointer; }
+        .btn-icon:hover { background: #f0f0f0; }
+        .btn-icon.danger { color: var(--danger); border-color: #f6c5c2; }
+        .btn-icon.danger:hover { background: #fce8e6; }
+        .action-btns { display: inline-flex; gap: 6px; }
+        .form-group { margin-bottom: 16px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+        label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 500; }
+        .required::after { content: ' *'; color: var(--danger); }
+        input, select, textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; transition: border 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+        textarea { resize: vertical; min-height: 70px; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+        .modal-overlay.show { display: flex; }
+        .modal { background: #fff; border-radius: var(--radius); width: 100%; max-width: 680px; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+        .modal.lg { max-width: 880px; }
+        .modal-header { padding: 18px 24px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; }
+        .modal-title { font-size: 17px; font-weight: 600; }
+        .modal-close { width: 32px; height: 32px; border: none; background: none; font-size: 20px; color: var(--text-tertiary); cursor: pointer; border-radius: 6px; }
+        .modal-close:hover { background: #f0f0f0; }
+        .modal-body { padding: 24px; }
+        .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; gap: 10px; }
+        .filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+        .filter-bar input, .filter-bar select { width: auto; min-width: 140px; }
+        .search-box { position: relative; }
+        .search-box input { padding-left: 34px; width: 240px; }
+        .search-box::before { content: "🔍"; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 14px; opacity: 0.5; }
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+        .chart-container { position: relative; height: 280px; }
+        .alert-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid; }
+        .alert-item.danger { background: #fef0ef; border-color: var(--danger); }
+        .alert-item.warning { background: #fefbf0; border-color: var(--warning); }
+        .alert-item.info { background: #f0f6ff; border-color: var(--primary); }
+        .alert-icon { font-size: 18px; flex-shrink: 0; }
+        .alert-content { flex: 1; }
+        .alert-title { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+        .alert-desc { font-size: 12px; color: var(--text-secondary); }
+        .alert-action { flex-shrink: 0; }
+        .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border-light); margin-bottom: 20px; }
+        .tab { padding: 8px 16px; cursor: pointer; font-size: 13px; color: var(--text-secondary); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-color: var(--primary); font-weight: 600; }
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+        .detail-item { display: flex; flex-direction: column; gap: 2px; }
+        .detail-label { font-size: 12px; color: var(--text-tertiary); }
+        .detail-value { font-size: 14px; font-weight: 500; }
+        .page { display: none; }
+        .page.active { display: block; }
+        @media (max-width: 900px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); }
+            .main { margin-left: 0; padding: 16px; }
+            .form-row, .form-row-3 { grid-template-columns: 1fr; }
+            .chart-grid { grid-template-columns: 1fr; }
+            .detail-grid { grid-template-columns: 1fr; }
+            .mobile-toggle { display: block !important; }
+        }
+        @media (max-width: 500px) {
+            .login-brand-logo { top: 20px; left: 20px; }
+            .login-brand-logo .brand-svg { width: 40px; height: 40px; }
+            .login-card { padding: 30px 24px; margin: 0 16px; }
+        }
+        .mobile-toggle { display: none; }
+        .pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-light); flex-wrap: wrap; }
+        .pagination-info { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+        .pagination-info strong { color: var(--text); font-weight: 600; }
+        .pagination-controls { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+        .page-btn { min-width: 32px; height: 32px; padding: 0 10px; border: 1px solid var(--border); background: #fff; border-radius: 6px; font-size: 13px; color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s; font-family: inherit; }
+        .page-btn:hover:not(:disabled):not(.active) { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+        .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .page-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+        .page-btn.nav-btn { font-weight: 500; }
+        .page-ellipsis { min-width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-tertiary); font-size: 13px; }
+        .pagination-jump { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+        .pagination-jump input { width: 56px; min-width: 56px; padding: 5px 8px; text-align: center; }
+        @media (max-width: 700px) {
+            .pagination { justify-content: center; gap: 10px; }
+            .pagination-info { width: 100%; text-align: center; }
+            .pagination-jump { width: 100%; justify-content: center; }
+        }
+        .login-page { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+        .login-brand-logo { position: absolute; top: 30px; left: 40px; display: flex; align-items: center; gap: 12px; z-index: 2; }
+        .login-brand-logo .brand-svg { width: 50px; height: 50px; flex-shrink: 0; }
+        .login-brand-logo .brand-text { line-height: 1.1; }
+        .login-brand-logo .brand-cn { color: #333333; font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+        .login-brand-logo .brand-en { color: var(--primary); font-size: 11px; font-weight: 600; letter-spacing: 3px; margin-top: 4px; }
+        .login-page::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: radial-gradient(circle at 20% 30%, rgba(26,115,232,0.08) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(52,168,83,0.06) 0%, transparent 50%); }
+        .login-card { background: #ffffff; border: 1px solid #e0e0e0; border-radius: 16px; padding: 40px 36px; width: 100%; max-width: 380px; position: relative; z-index: 1; box-shadow: 0 8px 32px rgba(0,0,0,0.08); }
+        .login-logo { text-align: center; margin-bottom: 28px; }
+        .login-logo h2 { color: #333333; font-size: 22px; font-weight: 600; }
+        .login-form .form-group { margin-bottom: 18px; }
+        .login-form label { color: #5f6368; font-weight: 500; }
+        .login-form input { background: #f8f9fa; border: 1px solid #e0e0e0; color: #333333; padding: 11px 14px; font-size: 14px; }
+        .login-form input:focus { border-color: var(--primary); background: #ffffff; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+        .password-wrapper { position: relative; width: 100%; }
+        .password-wrapper input { padding-right: 40px !important; }
+        .password-toggle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #9aa0a6; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 4px; z-index: 2; padding: 0; }
+        .login-btn { width: 100%; padding: 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        .login-btn:hover { background: var(--primary-dark); }
+        .login-error { color: var(--danger); font-size: 13px; text-align: center; margin-bottom: 12px; display: none; }
+        .login-error.show { display: block; }
+        .login-hint { text-align: center; margin-top: 16px; font-size: 12px; color: #9aa0a6; }
+        .btn-permission-hide { display: none !important; }
+        .sidebar-user { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 8px; }
+        .sidebar-user .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; font-weight: 600; flex-shrink: 0; }
+        .sidebar-user .user-info { flex: 1; min-width: 0; }
+        .sidebar-user .user-name { color: #e2e8f0; font-size: 13px; font-weight: 500; }
+        .sidebar-user .user-role { color: #64748b; font-size: 11px; }
+        .sidebar-user .logout-btn { background: none; border: none; color: #64748b; cursor: pointer; font-size: 16px; padding: 4px; border-radius: 4px; }
+        .sidebar-user .logout-btn:hover { color: var(--danger); background: rgba(234,67,53,0.1); }
+        .role-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+        .role-badge.admin { background: #e8f0fe; color: #174ea6; }
+        .role-badge.editor { background: #e6f4ea; color: #137333; }
+        .role-badge.viewer { background: #fef7e0; color: #b06000; }
+        .perm-banner { background: #fef7e0; border: 1px solid #f9ab00; border-radius: 8px; padding: 8px 14px; font-size: 12px; color: #b06000; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+        .cost-positive { color: #c5221f; font-weight: 500; }
+        .days-urgent { color: #c5221f; font-weight: 600; }
+        .days-warning { color: #b06000; font-weight: 600; }
+        .days-normal { color: #137333; }
+        .days-overdue { color: #c5221f; font-weight: 700; }
+    </style>
+</head>
+<body>
+
+<div class="login-page" id="login-page">
+    <div class="login-brand-logo">
+        <svg class="brand-svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="#1a73e8" stroke-width="6"/><text x="50" y="58" text-anchor="middle" font-family="Georgia" font-size="32" font-weight="700" font-style="italic" fill="#333" letter-spacing="-2">FZ</text><rect x="32" y="32" width="36" height="36" fill="none" stroke="#1a73e8" stroke-width="2" transform="rotate(45 50 50)"/></svg>
+        <div class="brand-text"><div class="brand-cn">方卓科技</div><div class="brand-en">FANGSTEERING</div></div>
+    </div>
+    <div class="login-card">
+        <div class="login-logo"><h2>设备管理系统</h2></div>
+        <div class="login-error" id="login-error">用户名或密码错误</div>
+        <div class="login-form">
+            <div class="form-group"><label>用户名</label><input type="text" id="login-username" placeholder="请输入用户名" autocomplete="off"></div>
+            <div class="form-group"><label>密码</label><div class="password-wrapper"><input type="password" id="login-password" placeholder="请输入密码" autocomplete="off"><button type="button" class="password-toggle" id="password-toggle" onclick="togglePassword()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+            <button class="login-btn" onclick="handleLogin()">登 录</button>
+        </div>
+        <div class="login-hint">宁波方卓科技有限公司 · v1.0</div>
+    </div>
+</div>
+
+<div class="app">
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header"><div class="logo">设备管理系统</div></div>
+        <nav class="sidebar-nav">
+            <div class="nav-item active" data-page="dashboard"><span class="icon">📊</span><span>数据看板</span></div>
+            <div class="nav-item" data-page="equipments"><span class="icon">🖥️</span><span>设备台账</span></div>
+            <div class="nav-item" data-page="maintenance-plan"><span class="icon">📅</span><span>保养计划</span></div>
+            <div class="nav-item" data-page="maintenance-records"><span class="icon">🛠️</span><span>保养记录</span></div>
+            <div class="nav-item" data-page="repair-records"><span class="icon">⚠️</span><span>维修记录</span></div>
+            <div class="nav-item" data-page="alerts"><span class="icon">🔔</span><span>预警提醒</span><span class="nav-badge hidden" id="alert-badge">0</span></div>
+            <div class="nav-item" data-page="reports"><span class="icon">📈</span><span>报表统计</span></div>
+            <div class="nav-item" data-page="settings"><span class="icon">⚙️</span><span>系统设置</span></div>
+            <div class="nav-item admin-only" data-page="users" style="display:none"><span class="icon">👥</span><span>用户管理</span></div>
+        </nav>
+        <div class="sidebar-user" id="sidebar-user" style="display:none">
+            <div class="avatar" id="user-avatar">U</div>
+            <div class="user-info"><div class="user-name" id="user-display-name">用户</div><div class="user-role" id="user-display-role">角色</div></div>
+            <button class="logout-btn" onclick="handleLogout()" title="退出登录">⏻</button>
+        </div>
+        <div class="sidebar-cloud" id="sidebar-cloud">
+            <span class="cloud-dot" id="cloud-dot"></span>
+            <span class="cloud-text" id="cloud-text">数据加载中…</span>
+            <button class="cloud-refresh" title="从云端刷新最新数据" onclick="location.reload()">↻</button>
+        </div>
+        <div class="sidebar-footer">v1.0 · 宁波方卓科技有限公司</div>
+    </aside>
+
+    <main class="main">
+        <button class="btn btn-outline mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰ 菜单</button>
+
+        <!-- Dashboard -->
+        <div class="page active" id="page-dashboard">
+            <div class="topbar dashboard-topbar">
+                <div class="dashboard-topbar-left">
+                    <h1>📊 数据看板</h1>
+                    <button class="btn btn-outline btn-sm" onclick="saveDataToSource()">💾 保存到source</button>
+                    <span id="dashboard-sync-status" class="badge badge-normal">✅ 同步成功</span>
+                </div>
+                <div class="dashboard-topbar-right">
+                    <div class="filter-bar">
+                        <select id="dashboard-time-range" class="btn btn-outline" onchange="updateDashboardTimeFilter()">
+                            <option value="6m">近6个月</option><option value="3m">近3个月</option><option value="1y">近1年</option>
+                            <option value="q1">第1季度</option><option value="q2">第2季度</option><option value="q3">第3季度</option><option value="q4">第4季度</option>
+                            <option value="custom">自定义范围</option>
+                        </select>
+                        <input type="date" id="dashboard-date-start" class="dashboard-date-input" onchange="updateDashboardTimeFilter()">
+                        <span class="dashboard-date-separator">至</span>
+                        <input type="date" id="dashboard-date-end" class="dashboard-date-input" onchange="updateDashboardTimeFilter()">
+                        <button class="btn btn-outline btn-sm" onclick="resetDashboardTimeFilter()">重置</button>
+                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="renderDashboard()">🔄 刷新</button>
+                    <span class="topbar-date" id="dashboard-date"></span>
+                </div>
+            </div>
+            <div class="stat-grid" id="dashboard-stats"></div>
+            <div class="chart-grid">
+                <div class="panel"><div class="panel-header"><span class="panel-title">设备状态分布</span></div><div class="panel-body"><div class="chart-container"><canvas id="chart-status"></canvas></div></div></div>
+                <div class="panel"><div class="panel-header"><span class="panel-title">各车间设备数量</span></div><div class="panel-body"><div class="chart-container"><canvas id="chart-workshop"></canvas></div></div></div>
+            </div>
+            <div class="chart-grid">
+                <div class="panel"><div class="panel-header"><span class="panel-title">近6月保养/维修次数趋势</span></div><div class="panel-body"><div class="chart-container"><canvas id="chart-trend"></canvas></div></div></div>
+                <div class="panel"><div class="panel-header"><span class="panel-title">维修费用统计（按月）</span></div><div class="panel-body"><div class="chart-container"><canvas id="chart-cost"></canvas></div></div></div>
+            </div>
+            <div class="panel">
+                <div class="panel-header"><span class="panel-title">待处理预警</span><button class="btn btn-outline btn-sm" onclick="navigateTo('alerts')">查看全部</button></div>
+                <div class="panel-body" id="dashboard-alerts"></div>
+            </div>
+        </div>
+
+        <!-- Equipments -->
+        <div class="page" id="page-equipments">
+            <div class="topbar"><h1>🖥️ 设备台账</h1><div class="topbar-actions">
+                <button class="btn btn-outline" onclick="exportEquipmentsExcel()">📥 导出Excel</button>
+                <button class="btn btn-primary" data-need-edit onclick="openEquipmentForm()">➕ 新增设备</button>
+            </div></div>
+            <div class="panel"><div class="panel-body">
+                <div class="filter-bar">
+                    <div class="search-box"><input type="text" id="equip-search" placeholder="搜索设备编号/名称..." oninput="equipPage=1;renderEquipmentTable()"></div>
+                    <select id="equip-filter-workshop" onchange="equipPage=1;renderEquipmentTable()">
+                        <option value="">全部车间</option><option value="注塑车间">注塑车间</option><option value="装配车间">装配车间</option><option value="实验室">实验室</option><option value="硅胶车间">硅胶车间</option>
+                    </select>
+                    <select id="equip-filter-status" onchange="equipPage=1;renderEquipmentTable()">
+                        <option value="">全部状态</option><option value="正常">正常</option><option value="保养中">保养中</option><option value="维修中">维修中</option>
+                        <option value="外协维修">外协维修</option><option value="待保养">待保养</option><option value="闲置">闲置</option><option value="报废">报废</option>
+                    </select>
+                </div>
+                <div class="table-wrap"><table><thead><tr><th>设备编号</th><th>设备名称</th><th>使用车间</th><th>供应商</th><th>状态</th><th>负责人</th><th>制造日期</th><th>操作</th></tr></thead><tbody id="equip-tbody"></tbody></table></div>
+                <div id="equip-pagination"></div>
+            </div></div>
+        </div>
+
+        <!-- Maintenance Plan -->
+        <div class="page" id="page-maintenance-plan">
+            <div class="topbar"><h1>📅 保养计划</h1><div class="topbar-actions">
+                <button class="btn btn-outline" onclick="exportPlansExcel()">📥 导出Excel</button>
+                <button class="btn btn-primary" data-need-edit onclick="openPlanForm()">➕ 新增保养计划</button>
+            </div></div>
+            <div class="panel"><div class="panel-body">
+                <div class="tabs">
+                    <div class="tab active" data-plan-tab="upcoming" onclick="switchPlanTab('upcoming')">即将到期</div>
+                    <div class="tab" data-plan-tab="all" onclick="switchPlanTab('all')">全部计划</div>
+                </div>
+                <div class="filter-bar"><div class="search-box"><input type="text" id="plan-search" placeholder="搜索设备编号/名称..." oninput="renderPlanTable()"></div></div>
+                <div class="table-wrap"><table><thead><tr><th>设备编号</th><th>设备名称</th><th>保养类型</th><th>间隔(天)</th><th>上次保养</th><th>预计下次</th><th>剩余天数</th><th>状态</th><th>操作</th></tr></thead><tbody id="plan-tbody"></tbody></table></div>
+            </div></div>
+        </div>
+
+        <!-- Maintenance Records -->
+        <div class="page" id="page-maintenance-records">
+            <div class="topbar"><h1>🛠️ 保养记录</h1><div class="topbar-actions">
+                <button class="btn btn-outline" onclick="exportMaintenanceExcel()">📥 导出Excel</button>
+                <button class="btn btn-primary" data-need-edit onclick="openMaintenanceForm()">➕ 新增保养记录</button>
+            </div></div>
+            <div class="panel"><div class="panel-body">
+                <div class="filter-bar">
+                    <div class="search-box"><input type="text" id="maint-search" placeholder="搜索设备编号/名称..." oninput="renderMaintenanceTable()"></div>
+                    <select id="maint-filter-type" onchange="renderMaintenanceTable()">
+                        <option value="二级保养">二级保养</option><option value="三级保养">三级保养</option>
+                    </select>
+                </div>
+                <div class="table-wrap"><table><thead><tr><th>日期</th><th>设备编号</th><th>设备名称</th><th>类型</th><th>保养内容</th><th>更换配件</th><th>费用(元)</th><th>执行人</th><th>结果</th><th>操作</th></tr></thead><tbody id="maint-tbody"></tbody></table></div>
+            </div></div>
+        </div>
+
+        <!-- Repair Records -->
+        <div class="page" id="page-repair-records">
+            <div class="topbar"><h1>⚠️ 维修记录</h1><div class="topbar-actions">
+                <button class="btn btn-outline" onclick="exportRepairExcel()">📥 导出Excel</button>
+                <button class="btn btn-primary" data-need-edit onclick="openRepairForm()">➕ 新增维修记录</button>
+            </div></div>
+            <div class="panel"><div class="panel-body">
+                <div class="filter-bar">
+                    <div class="search-box"><input type="text" id="repair-search" placeholder="搜索设备编号/名称..." oninput="renderRepairTable()"></div>
+                    <select id="repair-filter-level" onchange="renderRepairTable()">
+                        <option value="">全部级别</option><option value="轻微">轻微</option><option value="一般">一般</option><option value="严重">严重</option><option value="紧急">紧急</option>
+                    </select>
+                </div>
+                <div class="table-wrap"><table><thead><tr><th>维修日期</th><th>设备编号</th><th>设备名称</th><th>故障描述</th><th>故障原因</th><th>维修内容</th><th>配件</th><th>费用(元)</th><th>停机(h)</th><th>级别</th><th>维修人</th><th>操作</th></tr></thead><tbody id="repair-tbody"></tbody></table></div>
+            </div></div>
+        </div>
+
+        <!-- Alerts -->
+        <div class="page" id="page-alerts">
+            <div class="topbar"><h1>🔔 预警提醒</h1><div class="topbar-actions">
+                <button class="btn btn-outline" onclick="exportAlertsExcel()">📥 导出Excel</button>
+                <button class="btn btn-outline btn-sm" onclick="markAlertsRead()">📖 全部已读</button>
+            </div></div>
+            <div class="panel"><div class="panel-body">
+                <div class="tabs">
+                    <div class="tab active" data-alert-tab="all" onclick="switchAlertTab('all')">全部预警</div>
+                    <div class="tab" data-alert-tab="maintenance" onclick="switchAlertTab('maintenance')">保养到期</div>
+                    <div class="tab" data-alert-tab="repair" onclick="switchAlertTab('repair')">维修预警</div>
+                </div>
+                <div id="alerts-list"></div>
+            </div></div>
+        </div>
+
+        <!-- Reports -->
+        <div class="page" id="page-reports">
+            <div class="topbar"><h1>📈 报表统计</h1></div>
+            <div class="chart-grid">
+                <div class="panel"><div class="panel-header"><span class="panel-title">车间设备分布</span></div><div class="panel-body"><div class="chart-container"><canvas id="chart-report-workshop"></canvas></div></div></div>
+                <div class="panel"><div class="panel-header"><span class="panel-title">保养类型分布</span></div><div class="panel-body"><div class="chart-container"><canvas id="chart-report-maint-type"></canvas></div></div></div>
+            </div>
+            <div class="panel">
+                <div class="panel-header"><span class="panel-title">设备综合情况一览表</span><div class="topbar-actions"><button class="btn btn-outline btn-sm" onclick="exportReportExcel()">📥 导出Excel</button></div></div>
+                <div class="panel-body">
+                    <div class="filter-bar"><div class="search-box"><input type="text" id="report-search" placeholder="搜索设备编号/名称..." oninput="renderReportTable()"></div></div>
+                    <div class="table-wrap"><table><thead><tr><th>设备编号</th><th>名称</th><th>车间</th><th>状态</th><th>保养次数</th><th>维修次数</th><th>维修总费用(元)</th><th>上次保养</th><th>上次维修</th></tr></thead><tbody id="report-tbody"></tbody></table></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="page" id="page-settings">
+            <div class="topbar"><h1>⚙️ 系统设置</h1></div>
+            <div class="panel" style="max-width:600px">
+                <div class="panel-header"><span class="panel-title">数据管理</span><span id="source-sync-status" class="badge badge-normal" style="margin-left:auto">✅ 数据已同步</span></div>
+                <div class="panel-body">
+                    <div style="display:flex;flex-direction:column;gap:12px">
+                        <button class="btn btn-outline" onclick="exportAllDataExcel()">📥 导出全部数据（Excel）</button>
+                        <button class="btn btn-outline" onclick="saveDataToSource()">💾 保存到source文件夹（data.js）</button>
+                        <button class="btn btn-outline" onclick="reloadFromSource()">📤 从source文件夹加载（data.js）</button>
+                    </div>
+
+                    <div style="margin-top:16px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:13px;">
+                        <span style="font-weight:600;color:#166534;">☁️ 云端同步：</span>
+                        <span id="cloud-status" style="color:#166534;">加载中...</span>
+                    </div>
+
+                    <div style="margin-top:12px;padding:12px;border:1px solid #e5e7eb;border-radius:8px;">
+                        <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:8px;">💻 本地自动备份（双保险）</div>
+                        <div id="local-backup-status" style="font-size:12px;color:#9aa0a6;margin-bottom:10px;line-height:1.7;"></div>
+                        <button class="btn btn-outline btn-sm" onclick="localBackup.choose()">📁 选择本地备份文件夹</button>
+                        <div style="font-size:11px;color:#9aa0a6;line-height:1.6;margin-top:6px;">
+                            选择一次后，每次数据变动自动写 latest.json 到该文件夹，并每天生成一份带日期的历史备份。仅支持 Chrome/Edge。
+                        </div>
+                    </div>
+                    <div style="margin-top:16px;padding:12px;background:#f8f9fa;border-radius:6px;font-size:12px;color:#5f6368">
+                        <strong>💡 使用说明：</strong><br>
+                        1. 将HTML文件和source文件夹放在同一目录下<br>
+                        2. 打开HTML文件时，系统会自动加载source/data.js中的数据<br>
+                        3. 在另一台电脑上打开时，确保source文件夹也一同复制<br>
+                        4. 数据修改后点击"保存到source文件夹"同步数据
+                    </div>
+                </div>
+            </div>
+            <div class="panel" style="max-width:600px">
+                <div class="panel-header"><span class="panel-title">系统信息</span></div>
+                <div class="panel-body"><div class="detail-grid">
+                    <div class="detail-item"><span class="detail-label">系统名称</span><span class="detail-value">设备管理系统</span></div>
+                    <div class="detail-item"><span class="detail-label">版本号</span><span class="detail-value">v1.0</span></div>
+                    <div class="detail-item"><span class="detail-label">数据存储方式</span><span class="detail-value">data.js文件 + 浏览器缓存</span></div>
+                    <div class="detail-item"><span class="detail-label">开发单位</span><span class="detail-value">宁波方卓科技有限公司</span></div>
+                </div></div>
+            </div>
+        </div>
+
+        <!-- Users -->
+        <div class="page" id="page-users">
+            <div class="topbar"><h1>👥 用户管理</h1><div class="topbar-actions"><button class="btn btn-primary" onclick="openUserForm()">➕ 新增用户</button></div></div>
+            <div class="panel"><div class="panel-body">
+                <div class="perm-banner">ℹ️ 权限说明：<strong>管理员</strong>可管理所有数据和用户；<strong>查看并修改</strong>可增删改所有业务数据；<strong>只可查看</strong>只能浏览</div>
+                <div class="table-wrap"><table><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>权限级别</th><th>创建时间</th><th>最后登录</th><th>状态</th><th>操作</th></tr></thead><tbody id="user-tbody"></tbody></table></div>
+            </div></div>
+        </div>
+    </main>
+</div>
+
+<!-- Equipment Form Modal -->
+<div class="modal-overlay" id="modal-equipment"><div class="modal lg">
+    <div class="modal-header"><span class="modal-title" id="equip-modal-title">新增设备</span><button class="modal-close" onclick="closeModal('modal-equipment')">✕</button></div>
+    <div class="modal-body">
+        <input type="hidden" id="equip-id">
+        <div class="form-row">
+            <div class="form-group"><label class="required">设备编号</label><input type="text" id="equip-code" placeholder="如：EQ-INJ-001"></div>
+            <div class="form-group"><label class="required">设备名称</label><input type="text" id="equip-name" placeholder="如：海天注塑机MA2500"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label class="required">使用车间</label><select id="equip-workshop"><option value="注塑车间">注塑车间</option><option value="装配车间">装配车间</option><option value="实验室">实验室</option><option value="硅胶车间">硅胶车间</option></select></div>
+            <div class="form-group"><label>设备供应商</label><input type="text" id="equip-supplier" placeholder="如：宁波海天塑机集团"></div>
+        </div>
+        <div class="form-row-3">
+            <div class="form-group"><label class="required">状态</label><select id="equip-status"><option value="正常">正常</option><option value="保养中">保养中</option><option value="维修中">维修中</option><option value="外协维修">外协维修</option><option value="待保养">待保养</option><option value="闲置">闲置</option><option value="报废">报废</option></select></div>
+            <div class="form-group"><label>负责人</label><input type="text" id="equip-owner" placeholder="负责人姓名"></div>
+            <div class="form-group"><label>制造日期</label><input type="date" id="equip-made-date"></div>
+        </div>
+        <div class="form-group"><label>备注</label><textarea id="equip-notes" placeholder="其他说明..."></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-equipment')">取消</button><button class="btn btn-primary" onclick="saveEquipment()">保存</button></div>
+</div></div>
+
+<!-- Plan Form Modal -->
+<div class="modal-overlay" id="modal-plan"><div class="modal">
+    <div class="modal-header"><span class="modal-title" id="plan-modal-title">新增保养计划</span><button class="modal-close" onclick="closeModal('modal-plan')">✕</button></div>
+    <div class="modal-body">
+        <input type="hidden" id="plan-id">
+        <div class="form-group"><label class="required">设备选择</label><select id="plan-equipment"></select></div>
+        <div class="form-row">
+            <div class="form-group"><label class="required">保养类型</label><select id="plan-type"><option value="二级保养">二级保养</option><option value="三级保养">三级保养</option></select></div>
+            <div class="form-group"><label class="required">保养间隔（天）</label><input type="number" id="plan-interval" min="1" value="30"></div>
+        </div>
+        <div class="form-group"><label>上次保养日期</label><input type="date" id="plan-last-date"></div>
+        <div class="form-group"><label>保养内容要求</label><textarea id="plan-content" placeholder="该计划对应的保养内容要求..."></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-plan')">取消</button><button class="btn btn-primary" onclick="savePlan()">保存</button></div>
+</div></div>
+
+<!-- Maintenance Form Modal -->
+<div class="modal-overlay" id="modal-maintenance"><div class="modal lg">
+    <div class="modal-header"><span class="modal-title" id="maint-modal-title">新增保养记录</span><button class="modal-close" onclick="closeModal('modal-maintenance')">✕</button></div>
+    <div class="modal-body">
+        <input type="hidden" id="maint-id">
+        <div class="form-row">
+            <div class="form-group"><label class="required">设备选择</label><select id="maint-equipment"></select></div>
+            <div class="form-group"><label class="required">保养日期</label><input type="date" id="maint-date"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label class="required">保养类型</label><select id="maint-type"><option value="二级保养">二级保养</option><option value="三级保养">三级保养</option></select></div>
+            <div class="form-group"><label>保养费用（元）</label><input type="number" id="maint-cost" min="0" step="0.01" value="0"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label class="required">保养内容</label><textarea id="maint-content"></textarea></div>
+            <div class="form-group"><label>更换配件</label><textarea id="maint-parts"></textarea></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label class="required">执行人</label><input type="text" id="maint-worker"></div>
+            <div class="form-group"><label>保养结果</label><select id="maint-result"><option value="正常">正常</option><option value="需关注">需关注</option><option value="需维修">需维修</option></select></div>
+        </div>
+        <div class="form-group"><label>备注</label><textarea id="maint-notes"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-maintenance')">取消</button><button class="btn btn-primary" onclick="saveMaintenance()">保存</button></div>
+</div></div>
+
+<!-- Repair Form Modal -->
+<div class="modal-overlay" id="modal-repair"><div class="modal lg">
+    <div class="modal-header"><span class="modal-title" id="repair-modal-title">新增维修记录</span><button class="modal-close" onclick="closeModal('modal-repair')">✕</button></div>
+    <div class="modal-body">
+        <input type="hidden" id="repair-id">
+        <div class="form-row">
+            <div class="form-group"><label class="required">设备选择</label><select id="repair-equipment"></select></div>
+            <div class="form-group"><label class="required">维修日期</label><input type="date" id="repair-date"></div>
+        </div>
+        <div class="form-row-3">
+            <div class="form-group"><label class="required">故障级别</label><select id="repair-level"><option value="轻微">轻微</option><option value="一般">一般</option><option value="严重">严重</option><option value="紧急">紧急</option></select></div>
+            <div class="form-group"><label>维修费用（元）</label><input type="number" id="repair-cost" min="0" step="0.01" value="0"></div>
+            <div class="form-group"><label>停机时长（小时）</label><input type="number" id="repair-downtime" min="0" step="0.5" value="0"></div>
+        </div>
+        <div class="form-group"><label class="required">故障描述</label><textarea id="repair-fault"></textarea></div>
+        <div class="form-group"><label>故障原因</label><textarea id="repair-cause"></textarea></div>
+        <div class="form-group"><label class="required">维修内容</label><textarea id="repair-content"></textarea></div>
+        <div class="form-row">
+            <div class="form-group"><label>更换配件</label><input type="text" id="repair-parts"></div>
+            <div class="form-group"><label class="required">维修人</label><input type="text" id="repair-worker"></div>
+        </div>
+        <div class="form-group"><label>备注</label><textarea id="repair-notes"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-repair')">取消</button><button class="btn btn-primary" onclick="saveRepair()">保存</button></div>
+</div></div>
+
+<!-- Equipment Detail Modal -->
+<div class="modal-overlay" id="modal-detail"><div class="modal lg">
+    <div class="modal-header"><span class="modal-title">设备详情</span><button class="modal-close" onclick="closeModal('modal-detail')">✕</button></div>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-detail')">关闭</button></div>
+</div></div>
+
+<!-- Confirm Dialog -->
+<div class="modal-overlay" id="modal-confirm"><div class="modal" style="max-width:400px">
+    <div class="modal-body" style="padding:24px"><p id="confirm-message" style="font-size:15px"></p></div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-confirm')">取消</button><button class="btn btn-danger" id="confirm-ok-btn">确认</button></div>
+</div></div>
+
+<!-- User Form Modal -->
+<div class="modal-overlay" id="modal-user"><div class="modal">
+    <div class="modal-header"><span class="modal-title" id="user-modal-title">新增用户</span><button class="modal-close" onclick="closeModal('modal-user')">✕</button></div>
+    <div class="modal-body">
+        <input type="hidden" id="user-edit-id">
+        <div class="form-row">
+            <div class="form-group"><label class="required">用户名</label><input type="text" id="user-username" placeholder="登录用户名"></div>
+            <div class="form-group"><label class="required">姓名</label><input type="text" id="user-fullname" placeholder="真实姓名"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label class="required">密码</label><input type="text" id="user-password" placeholder="设置密码"></div>
+            <div class="form-group"><label class="required">确认密码</label><input type="text" id="user-password2" placeholder="再次输入密码"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label class="required">权限级别</label><select id="user-role"><option value="viewer">只可查看</option><option value="editor">查看并修改</option><option value="admin">管理员</option></select></div>
+            <div class="form-group"><label>状态</label><select id="user-status"><option value="active">启用</option><option value="disabled">禁用</option></select></div>
+        </div>
+        <div class="form-group"><label>备注</label><input type="text" id="user-notes"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-user')">取消</button><button class="btn btn-primary" onclick="saveUser()">保存</button></div>
+</div></div>
+
+<script>
+// ===== Data Layer =====
+const STORE_KEYS = {
+    equipments: 'eq_ms_equipments', maintenancePlans: 'eq_ms_plans', maintenanceRecords: 'eq_ms_maintenance',
+    repairRecords: 'eq_ms_repairs', users: 'eq_ms_users', session: 'eq_ms_session', alertsRead: 'eq_ms_alerts_read'
+};
+function loadData(key) {
+    if (window.__SOURCE_DATA__ && window.__SOURCE_DATA__[key]) {
+        const sd = window.__SOURCE_DATA__[key];
+        try { localStorage.setItem(STORE_KEYS[key], JSON.stringify(sd)); } catch(e) {}
+        return sd;
+    }
+    try { return JSON.parse(localStorage.getItem(STORE_KEYS[key])) || []; } catch(e) { return []; }
+}
+function saveData(key, data) { localStorage.setItem(STORE_KEYS[key], JSON.stringify(data)); try { if (window.cloudSync) cloudSync.schedulePush(); } catch(e) {} try { if (window.localBackup && localBackup.dirHandle) localBackup.save(); } catch(e) {} }
+
+// ============================================================
+// 云端同步层（同源 /api/db，Cloudflare Pages + KV）
+// ============================================================
+const CLOUD_CONFIG = { apiBase: '' };
+const cloudSync = {
+    version: 0, ready: false, pushTimer: null, pollingTimer: null,
+    isCloudConfigured: function() {
+        if (CLOUD_CONFIG.apiBase === '') return true;
+        return /^https?:\/\//.test(CLOUD_CONFIG.apiBase);
+    },
+    pack: function() {
+        const get = k => { try { return JSON.parse(localStorage.getItem(STORE_KEYS[k]) || '[]'); } catch(e) { return []; } };
+        return {
+            equipments: get('equipments'),
+            maintenancePlans: get('maintenancePlans'),
+            maintenanceRecords: get('maintenanceRecords'),
+            repairRecords: get('repairRecords'),
+            users: get('users')
+        };
+    },
+    pull: async function() {
+        if (!this.isCloudConfigured()) return null;
+        try { return await (await fetch(CLOUD_CONFIG.apiBase + '/api/db', { cache: 'no-store' })).json(); }
+        catch(e) { console.warn('cloud pull', e); return null; }
+    },
+    push: async function() {
+        if (!this.isCloudConfigured()) return false;
+        try {
+            const cur = await this.pull();
+            const expectVersion = cur ? cur.version : 0;
+            const res = await fetch(CLOUD_CONFIG.apiBase + '/api/db', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'If-Version': String(expectVersion) },
+                body: JSON.stringify({ db: this.pack(), savedBy: 'web' })
+            });
+            if (res.status === 200) { const j = await res.json(); this.version = j.version; this.ready = true; return true; }
+            else if (res.status === 409) { if (typeof showToast === 'function') showToast('⚠️ 数据已被其他电脑更新，请刷新', 'warning'); }
+        } catch(e) { console.warn('cloud push', e); }
+        return false;
+    },
+    schedulePush: function() {
+        if (this.pushTimer) clearTimeout(this.pushTimer);
+        this.pushTimer = setTimeout(() => { this.push(); }, 400);
+    },
+    setStatus: function(state) {
+        const dot = document.getElementById('cloud-dot');
+        const text = document.getElementById('cloud-text');
+        if (dot && text) {
+            dot.className = 'cloud-dot' + (state === 'ok' ? ' ok' : (state === 'warn' ? ' warn' : (state === 'err' ? ' err' : '')));
+            if (state === 'ok') text.textContent = '已同步 · ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
+            else if (state === 'sync') text.textContent = '同步中...';
+            else if (state === 'warn') text.textContent = '有新数据待刷新';
+            else text.textContent = '本地模式';
+        }
+        const el = document.getElementById('cloud-status');
+        if (!el) return;
+        if (state === 'ok') { el.textContent = '✅ 已同步 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}); el.style.color = '#166534'; }
+        else if (state === 'sync') { el.textContent = '⏳ 同步中...'; el.style.color = '#b06000'; }
+        else if (state === 'warn') { el.textContent = '⚠️ 有新数据待刷新'; el.style.color = '#b91c1c'; }
+        else { el.textContent = '💻 本地模式'; el.style.color = '#9aa0a6'; }
+    },
+    initOnLoad: async function() {
+        if (!this.isCloudConfigured()) return;
+        try {
+            const remote = await this.pull();
+            if (!remote || !remote.db || !remote.db.equipments) { this.ready = true; return; }
+            const remoteVer = remote.version || 0;
+            const localVer = Number(localStorage.getItem('eq_cloud_ver') || 0);
+            if (remoteVer > localVer) {
+                // 云端有更新，先提示用户，不自动覆盖
+                this.version = remoteVer; this.ready = true;
+                this.setStatus('warn');
+                if (typeof showToast === 'function') {
+                    showToast('⚠️ 检测到云端有新数据，点侧边栏 ↻ 可刷新，你的本地修改会保留', 'info', 5000);
+                }
+                return;
+            }
+            if (localVer > remoteVer) { await this.push(); return; }
+            this.version = remoteVer; this.ready = true;
+            localStorage.setItem('eq_cloud_ver', String(remoteVer));
+            this.setStatus('ok');
+            this.startPolling();
+        } catch(e) { console.warn('cloud init', e); }
+    },
+    startPolling: function() {
+        if (this.pollingTimer) clearInterval(this.pollingTimer);
+        this.pollingTimer = setInterval(async () => {
+            const remote = await this.pull();
+            if (remote && (remote.version || 0) > this.version) {
+                if (typeof showToast === 'function') showToast('🔄 其他电脑更新了数据，点 ↻ 刷新', 'info');
+            }
+        }, 90000);
+    }
+};
+window.cloudSync = cloudSync;
+
+const localBackup = {
+    dirHandle: null, _lastDay: '',
+    async init() {
+        try {
+            const db = await this._openDB();
+            const rec = await db.transaction('handles','readonly').objectStore('handles').get('backupDir');
+            if (rec && rec.handle) {
+                const allowed = await rec.handle.queryPermission({ mode: 'readwrite' });
+                if (allowed === 'granted') this.dirHandle = rec.handle;
+            }
+        } catch(e) {}
+        this._renderStatus();
+    },
+    _openDB() { return new Promise((res, rej) => { const r = indexedDB.open('eq_local_backup', 1); r.onupgradeneeded = () => r.result.createObjectStore('handles'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+    async choose() {
+        if (!window.showDirectoryPicker) { alert('请用 Chrome/Edge'); return; }
+        try {
+            const h = await window.showDirectoryPicker({ id: 'eq_backup', mode: 'readwrite' });
+            this.dirHandle = h;
+            const db = await this._openDB();
+            const tx = db.transaction('handles','readwrite');
+            tx.objectStore('handles').put({ handle: h }, 'backupDir');
+            await tx.done; this.save();
+            this._renderStatus();
+            if (typeof showToast === 'function') showToast('✅ 本地自动备份已开启', 'success');
+        } catch(e) { if (e.name !== 'AbortError') alert('失败：' + e.message); }
+    },
+    _renderStatus: function() {
+        const el = document.getElementById('local-backup-status');
+        if (!el) return;
+        el.innerHTML = this.dirHandle ? '✅ <b>已开启</b>：每次保存自动写 latest.json 到所选文件夹' : '⚪ 未开启：点下面按钮选一个文件夹';
+    },
+    async save() {
+        if (!this.dirHandle) return;
+        try {
+            const now = new Date(), pad = n => String(n).padStart(2,'0');
+            const data = JSON.stringify(cloudSync.pack());
+            const f = await this.dirHandle.getFileHandle('latest.json', { create: true });
+            const w = await f.createWritable(); await w.write(data); await w.close();
+        } catch(e) {}
+    }
+};
+window.localBackup = localBackup;
+function uid() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 6); }
+function escapeHtml(str) { if (str === null || str === undefined) return ''; return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
+function todayStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function daysBetween(date1, date2) { return Math.round((new Date(date2) - new Date(date1)) / 86400000); }
+function formatMoney(num) { return (Number(num) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+let confirmCallback = null;
+function showConfirm(msg, cb) {
+    document.getElementById('confirm-message').textContent = msg;
+    confirmCallback = cb;
+    document.getElementById('confirm-ok-btn').onclick = () => { closeModal('modal-confirm'); cb && cb(); };
+    openModal('modal-confirm');
+}
+
+let dataDirty = false;
+function updateDashboardSyncStatus(status) {
+    const el = document.getElementById('dashboard-sync-status'); if (!el) return;
+    const map = { syncing:['🔄 同步中...','badge-warning'], success:['✅ 同步成功','badge-normal'], failed:['❌ 同步失败','badge-error'], dirty:['⚠️ 数据未同步','badge-warning'] };
+    const [t, c] = map[status] || map.success; el.textContent = t; el.className = 'badge ' + c;
+}
+function updateSyncStatus() {
+    const el = document.getElementById('source-sync-status'); if (!el) return;
+    el.textContent = dataDirty ? '⚠️ 数据未同步' : '✅ 数据已同步';
+    el.className = dataDirty ? 'badge badge-warning' : 'badge badge-normal';
+}
+function markDataDirty() { dataDirty = true; updateSyncStatus(); updateDashboardSyncStatus('dirty'); }
+
+async function saveDataToSource() {
+    updateDashboardSyncStatus('syncing');
+    const data = { equipments, maintenancePlans, maintenanceRecords, repairRecords, users, version: '1.0.0' };
+    const content = `// 设备管理系统数据文件\nwindow.__SOURCE_DATA__ = ${JSON.stringify(data, null, 2)};`;
+    try {
+        if (window.showSaveFilePicker) {
+            const h = await window.showSaveFilePicker({ suggestedName: 'data.js', types: [{ description: 'JS', accept: { 'application/javascript': ['.js'] } }] });
+            const w = await h.createWritable(); await w.write(content); await w.close();
+            dataDirty = false; updateSyncStatus(); updateDashboardSyncStatus('success');
+            alert('数据已保存！请将下载的data.js放到source文件夹替换旧文件。'); return;
+        }
+    } catch(e) {}
+    const blob = new Blob([content], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = 'data.js'; document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    updateDashboardSyncStatus('dirty');
+    alert('请将下载的data.js复制到source文件夹中。');
+}
+function reloadFromSource() {
+    Object.values(STORE_KEYS).forEach(k => localStorage.removeItem(k));
+    const s = document.createElement('script'); s.src = './source/data.js?' + Date.now();
+    s.onload = () => {
+        document.head.removeChild(s);
+        equipments = loadData('equipments'); maintenancePlans = loadData('maintenancePlans');
+        maintenanceRecords = loadData('maintenanceRecords'); repairRecords = loadData('repairRecords');
+        users = loadData('users'); dataDirty = false; updateSyncStatus();
+        if (document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
+        else if (document.getElementById('page-equipments').classList.contains('active')) renderEquipmentTable();
+        updateDashboardSyncStatus('success'); alert('已重新加载数据！');
+    };
+    s.onerror = () => { if (document.head.contains(s)) document.head.removeChild(s); updateDashboardSyncStatus('failed'); alert('加载失败，请检查data.js是否存在'); };
+    document.head.appendChild(s);
+}
+
+let equipments = loadData('equipments');
+let maintenancePlans = loadData('maintenancePlans');
+let maintenanceRecords = loadData('maintenanceRecords');
+let repairRecords = loadData('repairRecords');
+function persistEquip() { saveData('equipments', equipments); markDataDirty(); }
+function persistPlans() { saveData('maintenancePlans', maintenancePlans); markDataDirty(); }
+function persistMaint() { saveData('maintenanceRecords', maintenanceRecords); markDataDirty(); }
+function persistRepairs() { saveData('repairRecords', repairRecords); markDataDirty(); }
+
+// ===== Users =====
+let users = loadData('users');
+let currentUser = null;
+let readAlerts = JSON.parse(localStorage.getItem(STORE_KEYS.alertsRead) || '[]');
+const ROLE_LABELS = { admin: '管理员', editor: '查看并修改', viewer: '只可查看' };
+function persistUsers() { saveData('users', users); markDataDirty(); }
+function loadUsers() {
+    users = loadData('users');
+    if (users.length === 0 || !users.find(u => u.username === 'admin')) {
+        users = [{ id: uid(), username: 'admin', password: 'admin123', fullname: '系统管理员', role: 'admin', status: 'active', notes: '默认管理员', createdAt: new Date().toISOString(), lastLogin: null }];
+        persistUsers();
+    }
+}
+function checkSession() {
+    const s = localStorage.getItem(STORE_KEYS.session);
+    if (s) try { const ss = JSON.parse(s); const u = users.find(x => x.id === ss.userId); if (u && u.status === 'active') { currentUser = u; return true; } } catch(e) {}
+    return false;
+}
+window.togglePassword = function() {
+    const i = document.getElementById('login-password'), t = document.getElementById('password-toggle');
+    if (i.type === 'password') { i.type = 'text'; t.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'; }
+    else { i.type = 'password'; t.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'; }
+};
+window.handleLogin = function() {
+    const u = document.getElementById('login-username').value.trim(), p = document.getElementById('login-password').value;
+    const err = document.getElementById('login-error');
+    if (!u || !p) { err.textContent = '请输入用户名和密码'; err.classList.add('show'); return; }
+    const user = users.find(x => x.username === u);
+    if (!user || user.password !== p) { err.textContent = '用户名或密码错误'; err.classList.add('show'); return; }
+    if (user.status !== 'active') { err.textContent = '账号已禁用'; err.classList.add('show'); return; }
+    localStorage.setItem(STORE_KEYS.session, JSON.stringify({ userId: user.id, time: Date.now() }));
+    user.lastLogin = new Date().toISOString(); persistUsers(); currentUser = user;
+    document.getElementById('login-page').style.display = 'none'; showApp();
+};
+function handleLogout() { showConfirm('确认退出登录？', () => {
+    stopDashboardRefresh(); localStorage.removeItem(STORE_KEYS.session); currentUser = null;
+    document.getElementById('login-page').style.display = 'flex';
+    document.getElementById('login-username').value = ''; document.getElementById('login-password').value = '';
+    document.getElementById('login-error').classList.remove('show'); document.getElementById('sidebar-user').style.display = 'none';
+}); }
+function showApp() {
+    document.getElementById('sidebar-user').style.display = 'flex';
+    document.getElementById('user-avatar').textContent = currentUser.fullname.charAt(0).toUpperCase();
+    document.getElementById('user-display-name').textContent = currentUser.fullname;
+    document.getElementById('user-display-role').textContent = ROLE_LABELS[currentUser.role];
+    document.querySelectorAll('.admin-only').forEach(el => { el.style.display = currentUser.role === 'admin' ? 'flex' : 'none'; });
+    applyPermissions();
+    try { renderDashboard(); } catch(e) {}
+    updateAlertBadge(); navigateTo('dashboard');
+}
+function canEdit() { return currentUser && (currentUser.role === 'admin' || currentUser.role === 'editor'); }
+function applyPermissions() {
+    const ed = canEdit();
+    document.querySelectorAll('[data-need-edit]').forEach(el => ed ? el.classList.remove('btn-permission-hide') : el.classList.add('btn-permission-hide'));
+    if (!ed && currentUser) {
+        document.querySelectorAll('.topbar-actions, .dashboard-topbar-right').forEach(tb => {
+            if (!tb.querySelector('.read-only-tag')) { const s=document.createElement('span'); s.className='badge badge-warning read-only-tag'; s.textContent='👁 只读模式'; s.style.marginRight='8px'; tb.insertBefore(s, tb.firstChild); }
+        });
+    } else document.querySelectorAll('.read-only-tag').forEach(el => el.remove());
+}
+
+// ===== Navigation =====
+document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => navigateTo(item.dataset.page)));
+function navigateTo(page) {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.page === page));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const t = document.getElementById('page-' + page); if (t) t.classList.add('active');
+    document.getElementById('sidebar').classList.remove('open');
+    try {
+        if (page === 'dashboard') { renderDashboard(); startDashboardRefresh(); }
+        else if (page === 'equipments') renderEquipmentTable();
+        else if (page === 'maintenance-plan') renderPlanTable();
+        else if (page === 'maintenance-records') renderMaintenanceTable();
+        else if (page === 'repair-records') renderRepairTable();
+        else if (page === 'alerts') renderAlerts();
+        else if (page === 'reports') renderReportPage();
+        else if (page === 'users') renderUserTable();
+        else if (page === 'settings') updateSyncStatus();
+    } catch(e) { console.error(e); }
+}
+
+// ===== Dashboard =====
+let charts = {};
+function destroyCharts() { Object.values(charts).forEach(c => { try { c.destroy(); } catch(e){} }); charts = {}; }
+function getLocalYYYYMM(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+function getLastNMonths(n) { const r=[], now=new Date(); for(let i=n-1;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1); r.push({yyyymm:getLocalYYYYMM(d), label:`${d.getFullYear()}年${d.getMonth()+1}月`});} return r; }
+function getQuarterMonths(q) { const now=new Date(), y=now.getFullYear(), m={q1:[1,2,3],q2:[4,5,6],q3:[7,8,9],q4:[10,11,12]}; return (m[q]||[]).map(i=>{const d=new Date(y,i-1,1);return{yyyymm:getLocalYYYYMM(d),label:`${d.getFullYear()}年${d.getMonth()+1}月`};}); }
+function getCustomMonths() {
+    const s=document.getElementById('dashboard-date-start').value, e=document.getElementById('dashboard-date-end').value;
+    if(!s||!e) return getLastNMonths(6);
+    const r=[], sd=new Date(s), ed=new Date(e); let c=new Date(sd.getFullYear(),sd.getMonth(),1), last=new Date(ed.getFullYear(),ed.getMonth(),1);
+    while(c<=last){r.push({yyyymm:getLocalYYYYMM(c),label:`${c.getFullYear()}年${c.getMonth()+1}月`}); c.setMonth(c.getMonth()+1);}
+    return r.length?r:getLastNMonths(6);
+}
+function getMonthsByTimeRange(t) {
+    return ({'6m':()=>getLastNMonths(6),'3m':()=>getLastNMonths(3),'1y':()=>getLastNMonths(12),q1:()=>getQuarterMonths('q1'),q2:()=>getQuarterMonths('q2'),q3:()=>getQuarterMonths('q3'),q4:()=>getQuarterMonths('q4'),custom:getCustomMonths}[t]||(()=>getLastNMonths(6)))();
+}
+function updateDashboardTimeFilter() {
+    const t=document.getElementById('dashboard-time-range').value;
+    const sd=document.getElementById('dashboard-date-start'), ed=document.getElementById('dashboard-date-end'), sp=document.querySelector('.dashboard-date-separator');
+    if(t==='custom'){sd.style.display='inline-block';if(sp)sp.style.display='inline-block';ed.style.display='inline-block';}
+    else{sd.style.display='none';if(sp)sp.style.display='none';ed.style.display='none';}
+    renderDashboard();
+}
+function resetDashboardTimeFilter(){document.getElementById('dashboard-time-range').value='6m';document.getElementById('dashboard-date-start').value='';document.getElementById('dashboard-date-end').value='';updateDashboardTimeFilter();}
+let dashboardRefreshTimer = null, lastMaintCount=0, lastRepairCount=0;
+function startDashboardRefresh() {
+    if(dashboardRefreshTimer) clearInterval(dashboardRefreshTimer);
+    lastMaintCount=maintenanceRecords.length; lastRepairCount=repairRecords.length;
+    dashboardRefreshTimer=setInterval(()=>{
+        if(document.getElementById('page-dashboard').classList.contains('active')){
+            if(maintenanceRecords.length!==lastMaintCount||repairRecords.length!==lastRepairCount){lastMaintCount=maintenanceRecords.length;lastRepairCount=repairRecords.length;renderDashboard();}
+        }
+    },5000);
+}
+function stopDashboardRefresh(){if(dashboardRefreshTimer){clearInterval(dashboardRefreshTimer);dashboardRefreshTimer=null;}}
+
+function statusBadge(s) {
+    const m={'正常':'status-badge-normal','保养中':'status-badge-maintenance','维修中':'status-badge-repair','外协维修':'status-badge-outsource','待保养':'status-badge-pending','闲置':'status-badge-idle','报废':'status-badge-scrapped'};
+    return `<span class="badge ${m[s]||''}">${escapeHtml(s)}</span>`;
+}
+function levelBadge(l) { const m={'轻微':'level-badge-light','一般':'level-badge-normal','严重':'level-badge-serious','紧急':'level-badge-urgent'}; return `<span class="badge ${m[l]||''}">${escapeHtml(l)}</span>`; }
+function planStatusBadge(d){if(d<0)return'<span class="badge badge-danger">已逾期</span>';if(d<=7)return'<span class="badge badge-danger">即将到期</span>';if(d<=15)return'<span class="badge badge-warning">临近到期</span>';return'<span class="badge badge-normal">正常</span>';}
+function getEquipment(id){return equipments.find(e=>e.id===id);}
+
+function renderDashboard() {
+    document.getElementById('dashboard-date').textContent = new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
+    const rt = document.getElementById('dashboard-time-range')?.value || '6m';
+    const fms = getMonthsByTimeRange(rt), mym = fms.map(m=>m.yyyymm);
+    const fm = maintenanceRecords.filter(r=>mym.some(m=>r.date.startsWith(m)));
+    const fr = repairRecords.filter(r=>mym.some(m=>r.date.startsWith(m)));
+    const sc = {}; equipments.forEach(e=>sc[e.status]=(sc[e.status]||0)+1);
+    document.getElementById('dashboard-stats').innerHTML = `
+        <div class="stat-card"><div class="stat-icon blue">🖥️</div><div class="stat-info"><div class="value">${equipments.length}</div><div class="label">设备总数</div></div></div>
+        <div class="stat-card"><div class="stat-icon green">✅</div><div class="stat-info"><div class="value">${sc['正常']||0}</div><div class="label">正常运行</div></div></div>
+        <div class="stat-card"><div class="stat-icon yellow">🛠️</div><div class="stat-info"><div class="value">${fm.length}</div><div class="label">保养记录</div></div></div>
+        <div class="stat-card"><div class="stat-icon red">⚠️</div><div class="stat-info"><div class="value">${fr.length}</div><div class="label">维修记录</div></div></div>
+    `;
+    const alerts = generateAlerts();
+    const dc = document.getElementById('dashboard-alerts');
+    dc.innerHTML = alerts.length? alerts.slice(0,5).map(a=>`
+        <div class="alert-item ${a.level}"><div class="alert-icon">${a.icon}</div>
+        <div class="alert-content"><div class="alert-title">${escapeHtml(a.title)}</div><div class="alert-desc">${escapeHtml(a.desc)}</div></div></div>`).join('')
+        :'<div style="text-align:center;padding:30px;color:#9aa0a6">🎉 暂无预警</div>';
+    destroyCharts();
+    const sl = Object.keys(sc), sd=Object.values(sc), sco={'正常':'#34a853','保养中':'#1a73e8','维修中':'#ea4335','外协维修':'#ff9800','待保养':'#f9ab00','闲置':'#7c1fa2','报废':'#9aa0a6'};
+    charts.status = new Chart(document.getElementById('chart-status'),{type:'doughnut',data:{labels:sl,datasets:[{data:sd,backgroundColor:sl.map(s=>sco[s]||'#ccc'),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{boxWidth:14,padding:10}}}}});
+    const wc={}; equipments.forEach(e=>wc[e.workshop]=(wc[e.workshop]||0)+1);
+    charts.workshop=new Chart(document.getElementById('chart-workshop'),{type:'bar',data:{labels:Object.keys(wc),datasets:[{label:'设备数量',data:Object.values(wc),backgroundColor:['#1a73e8','#34a853','#f9ab00'],borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+    const ml = fms.map(m=>m.label);
+    const mt = mym.map(m=>maintenanceRecords.filter(r=>r.date.startsWith(m)).length);
+    const rt_ = mym.map(m=>repairRecords.filter(r=>r.date.startsWith(m)).length);
+    charts.trend = new Chart(document.getElementById('chart-trend'),{type:'line',data:{labels:ml,datasets:[{label:'保养次数',data:mt,borderColor:'#1a73e8',backgroundColor:'rgba(26,115,232,0.1)',fill:true,tension:0.3},{label:'维修次数',data:rt_,borderColor:'#ea4335',backgroundColor:'rgba(234,67,53,0.1)',fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+    const ct = mym.map(m=>repairRecords.filter(r=>r.date.startsWith(m)).reduce((s,r)=>s+(Number(r.cost)||0),0));
+    charts.cost = new Chart(document.getElementById('chart-cost'),{type:'bar',data:{labels:ml,datasets:[{label:'维修费用(元)',data:ct,backgroundColor:'#ea4335',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+    updateDashboardSyncStatus(dataDirty?'dirty':'success');
+}
+
+// ===== Alerts =====
+function generateAlerts() {
+    const a=[], ts=todayStr();
+    maintenancePlans.forEach(p=>{
+        if(!p.lastDate) return;
+        const eq=getEquipment(p.equipmentId); if(!eq) return;
+        const n=new Date(p.lastDate); n.setDate(n.getDate()+(Number(p.interval)||30));
+        const dl=daysBetween(ts, n.toISOString().slice(0,10));
+        if(dl<0) a.push({id:'plan_o_'+p.id,type:'maintenance',level:'danger',icon:'🔴',title:`保养逾期：${eq.code} - ${eq.name}`,desc:`${p.type}已逾期${Math.abs(dl)}天，上次：${p.lastDate}，负责人：${eq.owner||'未分配'}`,relatedId:p.id});
+        else if(dl<=7) a.push({id:'plan_u_'+p.id,type:'maintenance',level:'warning',icon:'🟡',title:`保养即将到期：${eq.code} - ${eq.name}`,desc:`${p.type}还剩${dl}天，预计：${n.toISOString().slice(0,10)}`,relatedId:p.id});
+    });
+    repairRecords.forEach(r=>{
+        const eq=getEquipment(r.equipmentId); if(!eq) return;
+        if(eq.status==='维修中'||eq.status==='外协维修'){
+            const d=daysBetween(r.date, ts);
+            if(d>7) a.push({id:'rep_long_'+r.id,type:'repair',level:'danger',icon:'🔧',title:`维修超时：${eq.code} - ${eq.name}`,desc:`${eq.status}已${d}天，故障：${(r.fault||'').slice(0,50)}`,relatedId:r.id});
+        }
+        if((r.level==='紧急'||r.level==='严重')&&daysBetween(r.date,ts)<=15)
+            a.push({id:'rep_hi_'+r.id,type:'repair',level:r.level==='紧急'?'danger':'warning',icon:r.level==='紧急'?'🚨':'⚡',title:`高风险维修：${eq.code} - ${eq.name}`,desc:`【${r.level}】${(r.fault||'').slice(0,50)}，费用：¥${formatMoney(r.cost)}`,relatedId:r.id});
+    });
+    equipments.forEach(e=>{if(e.status==='待保养')a.push({id:'eq_pend_'+e.id,type:'maintenance',level:'warning',icon:'⏰',title:`待保养：${e.code} - ${e.name}`,desc:`车间：${e.workshop}，负责人：${e.owner||'未分配'}`,relatedId:e.id});});
+    const rk={danger:0,warning:1,info:2};
+    a.sort((x,y)=>(rk[x.level]||0)-(rk[y.level]||0));
+    return a;
+}
+function updateAlertBadge(){
+    const n=generateAlerts().filter(x=>!readAlerts.includes(x.id)).length;
+    const b=document.getElementById('alert-badge'); if(b){b.textContent=n;b.classList.toggle('hidden',n===0);}
+}
+function markAlertsRead(){readAlerts=generateAlerts().map(a=>a.id);localStorage.setItem(STORE_KEYS.alertsRead,JSON.stringify(readAlerts));updateAlertBadge();renderAlerts();}
+let currentAlertType='all';
+function switchAlertTab(t){currentAlertType=t;document.querySelectorAll('[data-alert-tab]').forEach(el=>el.classList.toggle('active',el.dataset.alertTab===t));renderAlerts();}
+function renderAlerts(){
+    let list=generateAlerts();
+    if(currentAlertType!=='all') list=list.filter(a=>a.type===currentAlertType);
+    const c=document.getElementById('alerts-list');
+    c.innerHTML = list.length? list.map(a=>{
+        const rd=readAlerts.includes(a.id);
+        return `<div class="alert-item ${a.level}" style="opacity:${rd?0.65:1}"><div class="alert-icon">${a.icon}</div>
+        <div class="alert-content"><div class="alert-title">${escapeHtml(a.title)}${rd?' <span class="badge" style="background:#f1f3f4;color:#5f6368;margin-left:8px;font-size:10px">已读</span>':''}</div><div class="alert-desc">${escapeHtml(a.desc)}</div></div>
+        <div class="alert-action">${a.type==='maintenance'?`<button class="btn btn-sm btn-primary" onclick="handleAlertAction('${a.type}','${a.relatedId}')">处理</button>`:''}</div></div>`;
+    }).join('') : '<div style="text-align:center;padding:50px;color:#9aa0a6">🎉 暂无预警</div>';
+}
+function handleAlertAction(type, rid){
+    if(type==='maintenance'){ const p=maintenancePlans.find(x=>x.id===rid); if(p) openMaintenanceForm(null, p.equipmentId, p.type); }
+}
+
+// ===== Equipment CRUD =====
+let equipPage=1; const EQ_PZ=10;
+function openEquipmentForm(id){
+    if(!canEdit()){alert('没有编辑权限');return;}
+    ['equip-id','equip-code','equip-name','equip-supplier','equip-owner','equip-made-date','equip-notes'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('equip-workshop').value='注塑车间';document.getElementById('equip-status').value='正常';
+    if(id){const e=equipments.find(x=>x.id===id);if(!e)return;
+        Object.entries({id:'equip-id',code:'equip-code',name:'equip-name',workshop:'equip-workshop',supplier:'equip-supplier',status:'equip-status',owner:'equip-owner',madeDate:'equip-made-date',notes:'equip-notes'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=e[k]||'';});
+        document.getElementById('equip-modal-title').textContent='编辑设备';
+    } else document.getElementById('equip-modal-title').textContent='新增设备';
+    openModal('modal-equipment');
+}
+function saveEquipment(){
+    const o={};['code','name','workshop','supplier','status','owner','madeDate','notes'].forEach(k=>o[k]=document.getElementById('equip-'+(k==='madeDate'?'made-date':k)).value.trim());
+    const editId=document.getElementById('equip-id').value;
+    if(!o.code){alert('请输入设备编号');return;}if(!o.name){alert('请输入设备名称');return;}
+    if(equipments.find(e=>e.code===o.code&&e.id!==editId)){alert('设备编号已存在');return;}
+    if(editId){const i=equipments.findIndex(e=>e.id===editId);if(i>=0)Object.assign(equipments[i],o);}
+    else equipments.push({id:uid(),...o});
+    persistEquip();closeModal('modal-equipment');renderEquipmentTable();updateAlertBadge();
+}
+function viewEquipment(id){
+    const e=equipments.find(x=>x.id===id);if(!e)return;
+    const em=maintenanceRecords.filter(r=>r.equipmentId===id).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+    const er=repairRecords.filter(r=>r.equipmentId===id).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+    document.getElementById('detail-body').innerHTML=`
+        <h3 style="margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border-light)">基本信息</h3>
+        <div class="detail-grid" style="margin-bottom:24px">
+        <div class="detail-item"><span class="detail-label">设备编号</span><span class="detail-value">${escapeHtml(e.code)}</span></div>
+        <div class="detail-item"><span class="detail-label">设备名称</span><span class="detail-value">${escapeHtml(e.name)}</span></div>
+        <div class="detail-item"><span class="detail-label">车间</span><span class="detail-value">${escapeHtml(e.workshop)}</span></div>
+        <div class="detail-item"><span class="detail-label">状态</span><span class="detail-value">${statusBadge(e.status)}</span></div>
+        <div class="detail-item"><span class="detail-label">供应商</span><span class="detail-value">${escapeHtml(e.supplier||'-')}</span></div>
+        <div class="detail-item"><span class="detail-label">负责人</span><span class="detail-value">${escapeHtml(e.owner||'-')}</span></div>
+        <div class="detail-item"><span class="detail-label">制造日期</span><span class="detail-value">${escapeHtml(e.madeDate||'-')}</span></div>
+        <div class="detail-item"><span class="detail-label">备注</span><span class="detail-value">${escapeHtml(e.notes||'-')}</span></div>
+        </div>
+        <h3 style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border-light)">最近保养记录（前5条）</h3>
+        <div class="table-wrap" style="margin-bottom:24px"><table><thead><tr><th>日期</th><th>类型</th><th>内容</th><th>费用</th><th>执行人</th><th>结果</th></tr></thead>
+        <tbody>${em.length?em.map(r=>`<tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.type)}</td><td>${escapeHtml((r.content||'').slice(0,40))}</td><td>¥${formatMoney(r.cost)}</td><td>${escapeHtml(r.worker||'')}</td><td>${escapeHtml(r.result||'')}</td></tr>`).join(''):'<tr><td colspan="6" class="table-empty">暂无</td></tr>'}</tbody></table></div>
+        <h3 style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border-light)">最近维修记录（前5条）</h3>
+        <div class="table-wrap"><table><thead><tr><th>日期</th><th>级别</th><th>故障</th><th>费用</th><th>停机(h)</th><th>维修人</th></tr></thead>
+        <tbody>${er.length?er.map(r=>`<tr><td>${escapeHtml(r.date)}</td><td>${levelBadge(r.level)}</td><td>${escapeHtml((r.fault||'').slice(0,40))}</td><td>¥${formatMoney(r.cost)}</td><td>${r.downtime||0}</td><td>${escapeHtml(r.worker||'')}</td></tr>`).join(''):'<tr><td colspan="6" class="table-empty">暂无</td></tr>'}</tbody></table></div>
+    `;
+    openModal('modal-detail');
+}
+function deleteEquipment(id){
+    if(!canEdit()){alert('没有编辑权限');return;}
+    const e=equipments.find(x=>x.id===id);
+    showConfirm(`确认删除设备"${e?.code}-${e?.name}"？相关保养计划一并删除。`,()=>{
+        equipments=equipments.filter(x=>x.id!==id);
+        maintenancePlans=maintenancePlans.filter(p=>p.equipmentId!==id);
+        persistEquip();persistPlans();renderEquipmentTable();updateAlertBadge();
+    });
+}
+function getFilteredEquipments(){
+    const kw=(document.getElementById('equip-search')?.value||'').trim().toLowerCase();
+    const ws=document.getElementById('equip-filter-workshop')?.value||'';
+    const st=document.getElementById('equip-filter-status')?.value||'';
+    return equipments.filter(e=>(!ws||e.workshop===ws)&&(!st||e.status===st)&&(!kw||(e.code+' '+e.name).toLowerCase().includes(kw)));
+}
+function renderPagination(cid, cur, tp, tc, ps, fn){
+    const c=document.getElementById(cid);if(!c)return;
+    if(tp<=1&&tc===0){c.innerHTML='';return;}
+    const s=(cur-1)*ps+1, en=Math.min(cur*ps,tc);
+    const arr=[];
+    arr.push(`<button class="page-btn nav-btn" ${cur===1?'disabled':''} onclick="${fn}(1)">首页</button>`);
+    arr.push(`<button class="page-btn nav-btn" ${cur===1?'disabled':''} onclick="${fn}(${cur-1})">上一页</button>`);
+    const pages=[];
+    if(tp<=7) for(let i=1;i<=tp;i++) pages.push(i);
+    else { pages.push(1); let f=Math.max(2,cur-2),t=Math.min(tp-1,cur+2); if(cur<=4)t=Math.min(tp-1,6); if(cur>=tp-3)f=Math.max(2,tp-5); if(f>2)pages.push('...'); for(let i=f;i<=t;i++)pages.push(i); if(t<tp-1)pages.push('...'); pages.push(tp); }
+    pages.forEach(p=>{if(p==='...')arr.push('<span class="page-ellipsis">…</span>');else arr.push(`<button class="page-btn ${p===cur?'active':''}" onclick="${fn}(${p})">${p}</button>`);});
+    arr.push(`<button class="page-btn nav-btn" ${cur===tp?'disabled':''} onclick="${fn}(${cur+1})">下一页</button>`);
+    arr.push(`<button class="page-btn nav-btn" ${cur===tp?'disabled':''} onclick="${fn}(${tp})">末页</button>`);
+    c.innerHTML=`<div class="pagination"><div class="pagination-info">共 <strong>${tc}</strong> 条，第 <strong>${s}-${en}</strong> / 共 <strong>${tp}</strong> 页</div><div class="pagination-controls">${arr.join('')}</div><div class="pagination-jump">跳转到 <input type="number" id="jp-${cid}" min="1" max="${tp}" value="${cur}" /> 页 <button class="btn btn-sm btn-primary" onclick="(function(){const p=parseInt(document.getElementById('jp-${cid}').value)||1;if(p>=1&&p<=${tp})${fn}(p);})()">跳转</button></div></div>`;
+}
+function goEquipPage(p){equipPage=p;renderEquipmentTable();}
+function renderEquipmentTable(){
+    const d=getFilteredEquipments();
+    const tc=d.length, tp=Math.max(1,Math.ceil(tc/EQ_PZ));
+    equipPage=Math.min(equipPage,tp);
+    const pd=d.slice((equipPage-1)*EQ_PZ,equipPage*EQ_PZ);
+    const tb=document.getElementById('equip-tbody');
+    tb.innerHTML = pd.length? pd.map(e=>`<tr>
+        <td><strong>${escapeHtml(e.code)}</strong></td><td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.workshop)}</td>
+        <td>${escapeHtml(e.supplier||'-')}</td><td>${statusBadge(e.status)}</td><td>${escapeHtml(e.owner||'-')}</td>
+        <td>${escapeHtml(e.madeDate||'-')}</td>
+        <td><div class="action-btns">
+            <button class="btn btn-sm btn-outline" onclick="viewEquipment('${e.id}')">查看</button>
+            <button class="btn btn-sm btn-outline" data-need-edit onclick="openEquipmentForm('${e.id}')">编辑</button>
+            <button class="btn btn-sm btn-danger" data-need-edit onclick="deleteEquipment('${e.id}')">删除</button>
+        </div></td></tr>`).join('') : '<tr><td colspan="8" class="table-empty">暂无数据</td></tr>';
+    renderPagination('equip-pagination',equipPage,tp,tc,EQ_PZ,'goEquipPage');
+    applyPermissions();
+}
+function populateEquipmentSelect(sid, selected){
+    const s=document.getElementById(sid);if(!s)return;
+    s.innerHTML=equipments.filter(e=>e.status!=='报废').map(e=>`<option value="${e.id}" ${selected===e.id?'selected':''}>${escapeHtml(e.code)}-${escapeHtml(e.name)}(${escapeHtml(e.workshop)})</option>`).join('');
+}
+
+// ===== Plan CRUD =====
+let currentPlanTab='upcoming';
+function switchPlanTab(t){currentPlanTab=t;document.querySelectorAll('[data-plan-tab]').forEach(el=>el.classList.toggle('active',el.dataset.planTab===t));renderPlanTable();}
+function getPlanInfo(p){
+    const eq=getEquipment(p.equipmentId), iv=Number(p.interval)||30;
+    let nd=null,dl=null;
+    if(p.lastDate){const d=new Date(p.lastDate);d.setDate(d.getDate()+iv);nd=d.toISOString().slice(0,10);dl=daysBetween(todayStr(),nd);}
+    return {eq,iv,nd,dl};
+}
+function openPlanForm(id){
+    if(!canEdit()){alert('没有编辑权限');return;}
+    populateEquipmentSelect('plan-equipment');
+    ['plan-id','plan-content','plan-last-date'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('plan-type').value='日常保养';document.getElementById('plan-interval').value=30;
+    if(id){const p=maintenancePlans.find(x=>x.id===id);if(!p)return;
+        Object.entries({id:'plan-id',equipmentId:'plan-equipment',type:'plan-type',interval:'plan-interval',lastDate:'plan-last-date',content:'plan-content'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=p[k]||'';});
+        document.getElementById('plan-modal-title').textContent='编辑保养计划';
+    } else document.getElementById('plan-modal-title').textContent='新增保养计划';
+    openModal('modal-plan');
+}
+function savePlan(){
+    const equipmentId=document.getElementById('plan-equipment').value, type=document.getElementById('plan-type').value, interval=Number(document.getElementById('plan-interval').value)||30, lastDate=document.getElementById('plan-last-date').value, content=document.getElementById('plan-content').value.trim();
+    const editId=document.getElementById('plan-id').value;
+    if(!equipmentId){alert('请选择设备');return;}if(interval<=0){alert('间隔必须大于0');return;}
+    if(editId){const i=maintenancePlans.findIndex(x=>x.id===editId);if(i>=0)Object.assign(maintenancePlans[i],{equipmentId,type,interval,lastDate,content});}
+    else maintenancePlans.push({id:uid(),equipmentId,type,interval,lastDate,content});
+    persistPlans();closeModal('modal-plan');renderPlanTable();updateAlertBadge();
+}
+function executePlanMaintenance(pid){
+    if(!canEdit()){alert('没有编辑权限');return;}
+    const p=maintenancePlans.find(x=>x.id===pid);if(p) openMaintenanceForm(null,p.equipmentId,p.type);
+}
+function deletePlan(id){if(!canEdit()){alert('没有编辑权限');return;}showConfirm('删除该计划？',()=>{maintenancePlans=maintenancePlans.filter(p=>p.id!==id);persistPlans();renderPlanTable();updateAlertBadge();});}
+function getFilteredPlans(){
+    const kw=(document.getElementById('plan-search')?.value||'').trim().toLowerCase();
+    let list=maintenancePlans.filter(p=>{const eq=getEquipment(p.equipmentId);if(!eq)return false;return !kw||(eq.code+' '+eq.name).toLowerCase().includes(kw);});
+    if(currentPlanTab==='upcoming') list=list.filter(p=>{const {dl}=getPlanInfo(p);return dl!==null&&dl<=15;});
+    list.sort((a,b)=>{const da=getPlanInfo(a).dl??99999, db=getPlanInfo(b).dl??99999;return da-db;});
+    return list;
+}
+function renderPlanTable(){
+    const list=getFilteredPlans();
+    document.getElementById('plan-tbody').innerHTML=list.length? list.map(p=>{
+        const {eq,nd,dl}=getPlanInfo(p);if(!eq)return '';
+        let dc='days-normal';
+        if(dl===null)dc='';else if(dl<0)dc='days-overdue';else if(dl<=7)dc='days-urgent';else if(dl<=15)dc='days-warning';
+        return `<tr><td><strong>${escapeHtml(eq.code)}</strong></td><td>${escapeHtml(eq.name)}</td><td>${escapeHtml(p.type)}</td><td>${p.interval}天</td>
+        <td>${escapeHtml(p.lastDate||'-')}</td><td>${escapeHtml(nd||'-')}</td>
+        <td class="${dc}">${dl===null?'-':(dl<0?'逾期'+Math.abs(dl)+'天':dl+'天')}</td>
+        <td>${dl===null?'<span class="badge badge-warning">待执行</span>':planStatusBadge(dl)}</td>
+        <td><div class="action-btns">
+            <button class="btn btn-sm btn-success" data-need-edit onclick="executePlanMaintenance('${p.id}')">执行保养</button>
+            <button class="btn btn-sm btn-outline" data-need-edit onclick="openPlanForm('${p.id}')">编辑</button>
+            <button class="btn btn-sm btn-danger" data-need-edit onclick="deletePlan('${p.id}')">删除</button>
+        </div></td></tr>`;
+    }).join('') : `<tr><td colspan="9" class="table-empty">${currentPlanTab==='upcoming'?'✅ 无即将到期的计划':'暂无计划'}</td></tr>`;
+    applyPermissions();
+}
+
+// ===== Maintenance Record CRUD =====
+function openMaintenanceForm(id, preEq, preType){
+    if(id===undefined&&!canEdit()){alert('没有编辑权限');return;}
+    populateEquipmentSelect('maint-equipment',preEq);
+    ['maint-id','maint-content','maint-parts','maint-worker','maint-notes'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('maint-date').value=todayStr();
+    document.getElementById('maint-type').value=preType||'日常保养';
+    document.getElementById('maint-cost').value=0;document.getElementById('maint-result').value='正常';
+    if(id){const r=maintenanceRecords.find(x=>x.id===id);if(!r)return;
+        Object.entries({id:'maint-id',equipmentId:'maint-equipment',date:'maint-date',type:'maint-type',cost:'maint-cost',content:'maint-content',parts:'maint-parts',worker:'maint-worker',result:'maint-result',notes:'maint-notes'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=r[k]??'';});
+        document.getElementById('maint-modal-title').textContent='编辑保养记录';
+    } else document.getElementById('maint-modal-title').textContent='新增保养记录';
+    openModal('modal-maintenance');
+}
+function saveMaintenance(){
+    const o={};['equipmentId','date','type'].forEach(k=>o[k]=document.getElementById('maint-'+(k==='equipmentId'?'equipment':k==='date'?'date':k)).value);
+    Object.entries({cost:'maint-cost',content:'maint-content',parts:'maint-parts',worker:'maint-worker',result:'maint-result',notes:'maint-notes'}).forEach(([k,v])=>{o[k]=document.getElementById(v).value.trim();});
+    o.cost=Number(o.cost)||0;
+    const editId=document.getElementById('maint-id').value;
+    if(!o.equipmentId){alert('请选择设备');return;}if(!o.date){alert('请选择日期');return;}if(!o.content){alert('请填写保养内容');return;}if(!o.worker){alert('请填写执行人');return;}
+    if(editId){const i=maintenanceRecords.findIndex(x=>x.id===editId);if(i>=0)Object.assign(maintenanceRecords[i],o);}
+    else{
+        maintenanceRecords.push({id:uid(),...o});
+        const p=maintenancePlans.find(pp=>pp.equipmentId===o.equipmentId&&pp.type===o.type);
+        if(p){p.lastDate=o.date;persistPlans();}
+    }
+    persistMaint();closeModal('modal-maintenance');renderMaintenanceTable();updateAlertBadge();
+}
+function deleteMaintenance(id){if(!canEdit()){alert('没有编辑权限');return;}showConfirm('删除该记录？',()=>{maintenanceRecords=maintenanceRecords.filter(r=>r.id!==id);persistMaint();renderMaintenanceTable();updateAlertBadge();});}
+function renderMaintenanceTable(){
+    const kw=(document.getElementById('maint-search')?.value||'').trim().toLowerCase(), tp=document.getElementById('maint-filter-type')?.value||'';
+    const list=maintenanceRecords.filter(r=>{
+        const eq=getEquipment(r.equipmentId);if(!eq)return false;
+        if(tp&&r.type!==tp)return false;
+        return !kw||(eq.code+' '+eq.name).toLowerCase().includes(kw);
+    }).sort((a,b)=>b.date.localeCompare(a.date));
+    document.getElementById('maint-tbody').innerHTML=list.length? list.map(r=>{
+        const eq=getEquipment(r.equipmentId);
+        return `<tr><td>${escapeHtml(r.date)}</td><td><strong>${escapeHtml(eq.code)}</strong></td><td>${escapeHtml(eq.name)}</td>
+        <td>${escapeHtml(r.type)}</td><td title="${escapeHtml(r.content||'')}">${escapeHtml((r.content||'').slice(0,25))}</td>
+        <td title="${escapeHtml(r.parts||'')}">${escapeHtml((r.parts||'-').slice(0,20))}</td>
+        <td class="cost-positive">¥${formatMoney(r.cost)}</td><td>${escapeHtml(r.worker||'')}</td>
+        <td>${escapeHtml(r.result||'')}</td>
+        <td><div class="action-btns">
+            <button class="btn btn-sm btn-outline" data-need-edit onclick="openMaintenanceForm('${r.id}')">编辑</button>
+            <button class="btn btn-sm btn-danger" data-need-edit onclick="deleteMaintenance('${r.id}')">删除</button>
+        </div></td></tr>`;
+    }).join('') : '<tr><td colspan="10" class="table-empty">暂无数据</td></tr>';
+    applyPermissions();
+}
+
+// ===== Repair Record CRUD =====
+function openRepairForm(id){
+    if(id===undefined&&!canEdit()){alert('没有编辑权限');return;}
+    populateEquipmentSelect('repair-equipment');
+    ['repair-id','repair-fault','repair-cause','repair-content','repair-parts','repair-worker','repair-notes'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('repair-date').value=todayStr();
+    document.getElementById('repair-level').value='一般';
+    document.getElementById('repair-cost').value=0;document.getElementById('repair-downtime').value=0;
+    if(id){const r=repairRecords.find(x=>x.id===id);if(!r)return;
+        Object.entries({id:'repair-id',equipmentId:'repair-equipment',date:'repair-date',level:'repair-level',cost:'repair-cost',downtime:'repair-downtime',fault:'repair-fault',cause:'repair-cause',content:'repair-content',parts:'repair-parts',worker:'repair-worker',notes:'repair-notes'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=r[k]??'';});
+        document.getElementById('repair-modal-title').textContent='编辑维修记录';
+    } else document.getElementById('repair-modal-title').textContent='新增维修记录';
+    openModal('modal-repair');
+}
+function saveRepair(){
+    const o={};['equipmentId','date','level'].forEach(k=>o[k]=document.getElementById('repair-'+(k==='equipmentId'?'equipment':k)).value);
+    Object.entries({cost:'repair-cost',downtime:'repair-downtime',fault:'repair-fault',cause:'repair-cause',content:'repair-content',parts:'repair-parts',worker:'repair-worker',notes:'repair-notes'}).forEach(([k,v])=>{o[k]=document.getElementById(v).value.trim();});
+    o.cost=Number(o.cost)||0;o.downtime=Number(o.downtime)||0;
+    const editId=document.getElementById('repair-id').value;
+    if(!o.equipmentId){alert('请选择设备');return;}if(!o.date){alert('请选择日期');return;}if(!o.fault){alert('请填写故障描述');return;}if(!o.content){alert('请填写维修内容');return;}if(!o.worker){alert('请填写维修人');return;}
+    if(editId){const i=repairRecords.findIndex(x=>x.id===editId);if(i>=0)Object.assign(repairRecords[i],o);}
+    else repairRecords.push({id:uid(),...o});
+    persistRepairs();closeModal('modal-repair');renderRepairTable();updateAlertBadge();
+}
+function deleteRepair(id){if(!canEdit()){alert('没有编辑权限');return;}showConfirm('删除该记录？',()=>{repairRecords=repairRecords.filter(r=>r.id!==id);persistRepairs();renderRepairTable();updateAlertBadge();});}
+function renderRepairTable(){
+    const kw=(document.getElementById('repair-search')?.value||'').trim().toLowerCase(), lv=document.getElementById('repair-filter-level')?.value||'';
+    const list=repairRecords.filter(r=>{
+        const eq=getEquipment(r.equipmentId);if(!eq)return false;
+        if(lv&&r.level!==lv)return false;
+        return !kw||(eq.code+' '+eq.name).toLowerCase().includes(kw);
+    }).sort((a,b)=>b.date.localeCompare(a.date));
+    document.getElementById('repair-tbody').innerHTML=list.length? list.map(r=>{
+        const eq=getEquipment(r.equipmentId);
+        return `<tr><td>${escapeHtml(r.date)}</td><td><strong>${escapeHtml(eq.code)}</strong></td><td>${escapeHtml(eq.name)}</td>
+        <td title="${escapeHtml(r.fault||'')}">${escapeHtml((r.fault||'').slice(0,20))}</td>
+        <td title="${escapeHtml(r.cause||'')}">${escapeHtml((r.cause||'-').slice(0,15))}</td>
+        <td title="${escapeHtml(r.content||'')}">${escapeHtml((r.content||'').slice(0,20))}</td>
+        <td>${escapeHtml((r.parts||'-').slice(0,15))}</td>
+        <td class="cost-positive">¥${formatMoney(r.cost)}</td><td>${r.downtime||0}</td><td>${levelBadge(r.level)}</td>
+        <td>${escapeHtml(r.worker||'')}</td>
+        <td><div class="action-btns">
+            <button class="btn btn-sm btn-outline" data-need-edit onclick="openRepairForm('${r.id}')">编辑</button>
+            <button class="btn btn-sm btn-danger" data-need-edit onclick="deleteRepair('${r.id}')">删除</button>
+        </div></td></tr>`;
+    }).join('') : '<tr><td colspan="12" class="table-empty">暂无数据</td></tr>';
+    applyPermissions();
+}
+
+// ===== Reports =====
+let reportCharts={};
+function renderReportPage(){
+    Object.values(reportCharts).forEach(c=>{try{c.destroy();}catch(e){}});reportCharts={};
+    const wc={};equipments.forEach(e=>wc[e.workshop]=(wc[e.workshop]||0)+1);
+    reportCharts.ws=new Chart(document.getElementById('chart-report-workshop'),{type:'pie',data:{labels:Object.keys(wc),datasets:[{data:Object.values(wc),backgroundColor:['#1a73e8','#34a853','#f9ab00','#7c1fa2'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{boxWidth:14}}}}});
+    const tc={};maintenanceRecords.forEach(r=>tc[r.type]=(tc[r.type]||0)+1);
+    reportCharts.mt=new Chart(document.getElementById('chart-report-maint-type'),{type:'doughnut',data:{labels:Object.keys(tc),datasets:[{data:Object.values(tc),backgroundColor:['#1a73e8','#34a853','#f9ab00','#ea4335'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{boxWidth:14}}}}});
+    renderReportTable();
+}
+function getEquipmentStats(eqId){
+    const m=maintenanceRecords.filter(r=>r.equipmentId===eqId);
+    const re=repairRecords.filter(r=>r.equipmentId===eqId);
+    return {
+        maintCount:m.length, repairCount:re.length,
+        totalRepairCost:re.reduce((s,r)=>s+(Number(r.cost)||0),0),
+        lastMaint: m.length? m.sort((a,b)=>b.date.localeCompare(a.date))[0].date : null,
+        lastRepair: re.length? re.sort((a,b)=>b.date.localeCompare(a.date))[0].date : null
+    };
+}
+function renderReportTable(){
+    const kw=(document.getElementById('report-search')?.value||'').trim().toLowerCase();
+    const list=equipments.filter(e=>!kw||(e.code+' '+e.name).toLowerCase().includes(kw));
+    document.getElementById('report-tbody').innerHTML=list.length? list.map(e=>{
+        const s=getEquipmentStats(e.id);
+        return `<tr><td><strong>${escapeHtml(e.code)}</strong></td><td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.workshop)}</td><td>${statusBadge(e.status)}</td>
+        <td style="text-align:center">${s.maintCount}</td><td style="text-align:center">${s.repairCount}</td>
+        <td class="cost-positive">¥${formatMoney(s.totalRepairCost)}</td>
+        <td>${escapeHtml(s.lastMaint||'-')}</td><td>${escapeHtml(s.lastRepair||'-')}</td></tr>`;
+    }).join('') : '<tr><td colspan="9" class="table-empty">暂无数据</td></tr>';
+}
+
+// ===== Export (CSV with BOM for Excel) =====
+function toCSV(header, rows){
+    const esc=v=>{let s=v==null?'':String(v); if(/[",\n]/.test(s)) s='"'+s.replace(/"/g,'""')+'"'; return s;};
+    return '\uFEFF'+[header.map(esc).join(',')].concat(rows.map(r=>r.map(esc).join(','))).join('\n');
+}
+function download(filename, content, type='text/csv;charset=utf-8'){
+    const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();
+    document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+function exportEquipmentsExcel(){
+    const d=getFilteredEquipments();
+    download(`设备台账_${todayStr()}.csv`, toCSV(['设备编号','设备名称','使用车间','供应商','状态','负责人','制造日期','备注'], d.map(e=>[e.code,e.name,e.workshop,e.supplier||'',e.status,e.owner||'',e.madeDate||'',e.notes||''])));
+}
+function exportPlansExcel(){
+    const d=getFilteredPlans();
+    const rows=d.map(p=>{const {eq,nd,dl}=getPlanInfo(p); return [eq?eq.code:'',eq?eq.name:'',p.type,p.interval+'天',p.lastDate||'',nd||'',dl===null?'':(dl<0?'逾期'+Math.abs(dl)+'天':dl+'天')];});
+    download(`保养计划_${todayStr()}.csv`, toCSV(['设备编号','设备名称','保养类型','间隔','上次保养日期','预计下次','剩余天数'], rows));
+}
+function exportMaintenanceExcel(){
+    const kw=(document.getElementById('maint-search')?.value||'').trim().toLowerCase(), tp=document.getElementById('maint-filter-type')?.value||'';
+    const d=maintenanceRecords.filter(r=>{const eq=getEquipment(r.equipmentId);if(!eq)return false;if(tp&&r.type!==tp)return false;return !kw||(eq.code+' '+eq.name).toLowerCase().includes(kw);});
+    download(`保养记录_${todayStr()}.csv`, toCSV(['日期','设备编号','设备名称','类型','内容','更换配件','费用(元)','执行人','结果','备注'], d.map(r=>{const eq=getEquipment(r.equipmentId);return [r.date,eq?eq.code:'',eq?eq.name:'',r.type,r.content||'',r.parts||'',r.cost||0,r.worker||'',r.result||'',r.notes||''];})));
+}
+function exportRepairExcel(){
+    const kw=(document.getElementById('repair-search')?.value||'').trim().toLowerCase(), lv=document.getElementById('repair-filter-level')?.value||'';
+    const d=repairRecords.filter(r=>{const eq=getEquipment(r.equipmentId);if(!eq)return false;if(lv&&r.level!==lv)return false;return !kw||(eq.code+' '+eq.name).toLowerCase().includes(kw);});
+    download(`维修记录_${todayStr()}.csv`, toCSV(['日期','设备编号','设备名称','级别','故障描述','原因','维修内容','更换配件','费用(元)','停机(h)','维修人','备注'], d.map(r=>{const eq=getEquipment(r.equipmentId);return [r.date,eq?eq.code:'',eq?eq.name:'',r.level,r.fault||'',r.cause||'',r.content||'',r.parts||'',r.cost||0,r.downtime||0,r.worker||'',r.notes||''];})));
+}
+function exportAlertsExcel(){
+    const d=generateAlerts();
+    download(`预警提醒_${todayStr()}.csv`, toCSV(['类型','级别','标题','详情'], d.map(a=>[a.type,a.level,a.title,a.desc])));
+}
+function exportReportExcel(){
+    const kw=(document.getElementById('report-search')?.value||'').trim().toLowerCase();
+    const d=equipments.filter(e=>!kw||(e.code+' '+e.name).toLowerCase().includes(kw));
+    download(`设备综合报表_${todayStr()}.csv`, toCSV(['设备编号','名称','车间','状态','保养次数','维修次数','维修总费用(元)','上次保养','上次维修'], d.map(e=>{const s=getEquipmentStats(e.id);return [e.code,e.name,e.workshop,e.status,s.maintCount,s.repairCount,s.totalRepairCost,s.lastMaint||'',s.lastRepair||''];})));
+}
+function exportAllDataExcel(){
+    const now=todayStr();
+    // Equipments
+    download(`全部数据_设备台账_${now}.csv`, toCSV(['设备编号','设备名称','使用车间','供应商','状态','负责人','制造日期','备注'], equipments.map(e=>[e.code,e.name,e.workshop,e.supplier||'',e.status,e.owner||'',e.madeDate||'',e.notes||''])));
+    setTimeout(()=>{
+    // Plans
+    const pr=maintenancePlans.map(p=>{const {eq,nd}=getPlanInfo(p);return [eq?eq.code:'',eq?eq.name:'',p.type,p.interval+'天',p.lastDate||'',nd||'',p.content||''];});
+    download(`全部数据_保养计划_${now}.csv`, toCSV(['设备编号','设备名称','保养类型','间隔','上次保养','预计下次','内容要求'], pr));
+    },200);
+    setTimeout(()=>{
+    download(`全部数据_保养记录_${now}.csv`, toCSV(['日期','设备编号','设备名称','类型','内容','配件','费用','执行人','结果','备注'], maintenanceRecords.map(r=>{const eq=getEquipment(r.equipmentId);return [r.date,eq?eq.code:'',eq?eq.name:'',r.type,r.content||'',r.parts||'',r.cost||0,r.worker||'',r.result||'',r.notes||''];})));
+    },400);
+    setTimeout(()=>{
+    download(`全部数据_维修记录_${now}.csv`, toCSV(['日期','设备编号','设备名称','级别','故障','原因','维修内容','配件','费用','停机(h)','维修人','备注'], repairRecords.map(r=>{const eq=getEquipment(r.equipmentId);return [r.date,eq?eq.code:'',eq?eq.name:'',r.level,r.fault||'',r.cause||'',r.content||'',r.parts||'',r.cost||0,r.downtime||0,r.worker||'',r.notes||''];})));
+    },600);
+    setTimeout(()=>alert('全部数据已导出为多个CSV文件，请在下载文件夹中查看。'),800);
+}
+
+// ===== User Management =====
+function openUserForm(id){
+    if(!canManageUsers()){alert('仅管理员可管理用户');return;}
+    ['user-edit-id','user-username','user-fullname','user-password','user-password2','user-notes'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('user-role').value='viewer';document.getElementById('user-status').value='active';
+    if(id){const u=users.find(x=>x.id===id);if(!u)return;
+        Object.entries({id:'user-edit-id',username:'user-username',fullname:'user-fullname',password:'user-password',role:'user-role',status:'user-status',notes:'user-notes'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=u[k]??'';});
+        document.getElementById('user-password2').value=u.password||'';
+        document.getElementById('user-modal-title').textContent='编辑用户';
+    } else document.getElementById('user-modal-title').textContent='新增用户';
+    openModal('modal-user');
+}
+function canManageUsers(){return currentUser && currentUser.role==='admin';}
+function saveUser(){
+    const username=document.getElementById('user-username').value.trim(), fullname=document.getElementById('user-fullname').value.trim(),
+        password=document.getElementById('user-password').value, password2=document.getElementById('user-password2').value,
+        role=document.getElementById('user-role').value, status=document.getElementById('user-status').value,
+        notes=document.getElementById('user-notes').value.trim(), editId=document.getElementById('user-edit-id').value;
+    if(!username){alert('请输入用户名');return;}if(!fullname){alert('请输入姓名');return;}
+    if(!editId && !password){alert('请设置密码');return;}if(password!==password2){alert('两次密码不一致');return;}
+    if(users.find(u=>u.username===username && u.id!==editId)){alert('用户名已存在');return;}
+    if(editId){const i=users.findIndex(u=>u.id===editId);if(i>=0)Object.assign(users[i],{username,fullname,password,role,status,notes});}
+    else users.push({id:uid(),username,fullname,password,role,status,notes,createdAt:new Date().toISOString(),lastLogin:null});
+    persistUsers();closeModal('modal-user');renderUserTable();
+}
+function deleteUser(id){
+    if(id===currentUser.id){alert('不能删除当前用户');return;}
+    const u=users.find(x=>x.id===id);
+    showConfirm(`确认删除用户"${u?.fullname}"？`,()=>{users=users.filter(x=>x.id!==id);persistUsers();renderUserTable();});
+}
+function toggleUserStatus(id){
+    if(id===currentUser.id){alert('不能禁用当前用户');return;}
+    const u=users.find(x=>x.id===id);if(!u)return;
+    u.status=u.status==='active'?'disabled':'active';persistUsers();renderUserTable();
+}
+function renderUserTable(){
+    const tbody=document.getElementById('user-tbody');
+    tbody.innerHTML=users.length? users.map(u=>{
+        const isSelf=u.id===currentUser?.id;
+        return `<tr><td><strong>${escapeHtml(u.username)}</strong>${isSelf?' <span class="badge badge-normal" style="font-size:10px">当前</span>':''}</td>
+        <td>${escapeHtml(u.fullname)}</td><td><span class="role-badge ${ROLE_BADGE[u.role]||''}">${ROLE_LABELS[u.role]||u.role}</span></td>
+        <td>${escapeHtml(u.role)}</td>
+        <td>${u.createdAt?new Date(u.createdAt).toLocaleString('zh-CN'):'-'}</td>
+        <td>${u.lastLogin?new Date(u.lastLogin).toLocaleString('zh-CN'):'-'}</td>
+        <td>${u.status==='active'?'<span class="badge badge-normal">启用</span>':'<span class="badge badge-scrapped">禁用</span>'}</td>
+        <td><div class="action-btns">
+            <button class="btn btn-sm btn-outline" onclick="openUserForm('${u.id}')">编辑</button>
+            <button class="btn btn-sm ${u.status==='active'?'btn-outline':'btn-success'}" onclick="toggleUserStatus('${u.id}')">${u.status==='active'?'禁用':'启用'}</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">删除</button>
+        </div></td></tr>`;
+    }).join('') : '<tr><td colspan="8" class="table-empty">暂无用户</td></tr>';
+}
+
+// ===== Init =====
+window.addEventListener('DOMContentLoaded', () => {
+    if (window.cloudSync) { try { cloudSync.initOnLoad(); } catch(e) { console.warn(e); } }
+    if (window.localBackup) { try { localBackup.init(); } catch(e) { console.warn(e); } }
+    loadUsers();
+    if (checkSession()) {
+        document.getElementById('login-page').style.display = 'none';
+        showApp();
+    }
+    document.getElementById('login-password')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+    document.getElementById('login-username')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+});
+</script>
+</body>
+</html>
