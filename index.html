@@ -677,21 +677,20 @@ const cloudSync = {
             const remote = await this.pull();
             if (!remote || !remote.db || !remote.db.equipments) { this.ready = true; return; }
             const remoteVer = remote.version || 0;
-            const localVer = Number(localStorage.getItem('eq_cloud_ver') || 0);
-            if (remoteVer > localVer) {
-                // 云端有更新，先提示用户，不自动覆盖
-                this.version = remoteVer; this.ready = true;
-                this.setStatus('warn');
-                if (typeof showToast === 'function') {
-                    showToast('⚠️ 检测到云端有新数据，点侧边栏 ↻ 可刷新，你的本地修改会保留', 'info', 5000);
-                }
-                return;
-            }
-            if (localVer > remoteVer) { await this.push(); return; }
+            
+            // 总是以服务器数据为准，直接应用
             this.version = remoteVer; this.ready = true;
             localStorage.setItem('eq_cloud_ver', String(remoteVer));
             this.setStatus('ok');
             this.startPolling();
+            
+            // 应用服务器数据到本地
+            if (typeof applyRemoteDB === 'function') {
+                applyRemoteDB(remote.db);
+            }
+        } catch(e) {
+            console.warn('cloud init error', e);
+        }
         } catch(e) { console.warn('cloud init', e); }
     },
     startPolling: function() {
