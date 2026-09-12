@@ -710,7 +710,6 @@ const cloudSync = {
         } catch(e) {
             console.warn('cloud init error', e);
         }
-        } catch(e) { console.warn('cloud init', e); }
     },
     startPolling: function() {
         if (this.pollingTimer) clearInterval(this.pollingTimer);
