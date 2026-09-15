@@ -363,7 +363,7 @@
                         <option value="二级保养">二级保养</option><option value="三级保养">三级保养</option>
                     </select>
                 </div>
-                <div class="table-wrap"><table><thead><tr><th>日期</th><th>设备编号</th><th>设备名称</th><th>类型</th><th>保养内容</th><th>更换配件</th><th>费用(元)</th><th>执行人</th><th>结果</th><th>操作</th></tr></thead><tbody id="maint-tbody"></tbody></table></div>
+                <div class="table-wrap"><table><thead><tr><th>日期</th><th>设备编号</th><th>设备名称</th><th>类型</th><th>保养内容</th><th>保养图片</th><th>更换配件</th><th>费用(元)</th><th>执行人</th><th>结果</th><th>操作</th></tr></thead><tbody id="maint-tbody"></tbody></table></div>
             </div></div>
         </div>
 
@@ -527,6 +527,11 @@
         <div class="form-row">
             <div class="form-group"><label class="required">保养内容</label><textarea id="maint-content"></textarea></div>
             <div class="form-group"><label>更换配件</label><textarea id="maint-parts"></textarea></div>
+        </div>
+        <div class="form-group"><label>保养图片</label>
+            <input type="file" id="maint-photo-file" accept="image/*" onchange="handleMaintPhotoUpload(this)">
+            <div id="maint-photo-preview" style="margin-top:8px;"></div>
+            <input type="hidden" id="maint-photo">
         </div>
         <div class="form-row">
             <div class="form-group"><label class="required">执行人</label><input type="text" id="maint-worker"></div>
@@ -1203,15 +1208,51 @@ function renderPlanTable(){
 }
 
 // ===== Maintenance Record CRUD =====
+function handleMaintPhotoUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { alert('请选择图片文件'); input.value=''; return; }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            const maxW = 800;
+            let w = img.width, h = img.height;
+            if (w > maxW) { h = h * maxW / w; w = maxW; }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const compressed = canvas.toDataURL('image/jpeg', 0.7);
+            document.getElementById('maint-photo').value = compressed;
+            document.getElementById('maint-photo-preview').innerHTML =
+                '<img src="' + compressed + '" style="max-width:100%;max-height:160px;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="window.open(this.src)">';
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+function showMaintPhotoPreview(src) {
+    const p = window.open('', '_blank');
+    p.document.write('<img src="' + src + '" style="max-width:100%;">');
+}
+
 function openMaintenanceForm(id, preEq, preType){
     if(id===undefined&&!canEdit()){alert('没有编辑权限');return;}
     populateEquipmentSelect('maint-equipment',preEq);
     ['maint-id','maint-content','maint-parts','maint-worker','maint-notes'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('maint-photo').value='';
+    document.getElementById('maint-photo-file').value='';
+    document.getElementById('maint-photo-preview').innerHTML='';
     document.getElementById('maint-date').value=todayStr();
     document.getElementById('maint-type').value=preType||'日常保养';
     document.getElementById('maint-cost').value=0;document.getElementById('maint-result').value='正常';
     if(id){const r=maintenanceRecords.find(x=>x.id===id);if(!r)return;
         Object.entries({id:'maint-id',equipmentId:'maint-equipment',date:'maint-date',type:'maint-type',cost:'maint-cost',content:'maint-content',parts:'maint-parts',worker:'maint-worker',result:'maint-result',notes:'maint-notes'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=r[k]??'';});
+        if(r.photo){
+            document.getElementById('maint-photo').value=r.photo;
+            document.getElementById('maint-photo-preview').innerHTML=
+                '<img src="'+r.photo+'" style="max-width:100%;max-height:160px;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;" onclick="window.open(this.src)">';
+        }
         document.getElementById('maint-modal-title').textContent='编辑保养记录';
     } else document.getElementById('maint-modal-title').textContent='新增保养记录';
     openModal('modal-maintenance');
@@ -1219,6 +1260,7 @@ function openMaintenanceForm(id, preEq, preType){
 function saveMaintenance(){
     const o={};['equipmentId','date','type'].forEach(k=>o[k]=document.getElementById('maint-'+(k==='equipmentId'?'equipment':k==='date'?'date':k)).value);
     Object.entries({cost:'maint-cost',content:'maint-content',parts:'maint-parts',worker:'maint-worker',result:'maint-result',notes:'maint-notes'}).forEach(([k,v])=>{o[k]=document.getElementById(v).value.trim();});
+    o.photo=document.getElementById('maint-photo').value||'';
     o.cost=Number(o.cost)||0;
     const editId=document.getElementById('maint-id').value;
     if(!o.equipmentId){alert('请选择设备');return;}if(!o.date){alert('请选择日期');return;}if(!o.content){alert('请填写保养内容');return;}if(!o.worker){alert('请填写执行人');return;}
@@ -1242,6 +1284,7 @@ function renderMaintenanceTable(){
         const eq=getEquipment(r.equipmentId);
         return `<tr><td>${escapeHtml(r.date)}</td><td><strong>${escapeHtml(eq.code)}</strong></td><td>${escapeHtml(eq.name)}</td>
         <td>${escapeHtml(r.type)}</td><td title="${escapeHtml(r.content||'')}">${escapeHtml((r.content||'').slice(0,25))}</td>
+        <td>${r.photo?'<img src="'+r.photo+'" style="width:48px;height:48px;object-fit:cover;border-radius:4px;cursor:pointer;border:1px solid #e0e0e0;" onclick="showMaintPhotoPreview(\''+r.photo+'\')">':'—'}</td>
         <td title="${escapeHtml(r.parts||'')}">${escapeHtml((r.parts||'-').slice(0,20))}</td>
         <td class="cost-positive">¥${formatMoney(r.cost)}</td><td>${escapeHtml(r.worker||'')}</td>
         <td>${escapeHtml(r.result||'')}</td>
@@ -1249,7 +1292,7 @@ function renderMaintenanceTable(){
             <button class="btn btn-sm btn-outline" data-need-edit onclick="openMaintenanceForm('${r.id}')">编辑</button>
             <button class="btn btn-sm btn-danger" data-need-edit onclick="deleteMaintenance('${r.id}')">删除</button>
         </div></td></tr>`;
-    }).join('') : '<tr><td colspan="10" class="table-empty">暂无数据</td></tr>';
+    }).join('') : '<tr><td colspan="11" class="table-empty">暂无数据</td></tr>';
     applyPermissions();
 }
 
