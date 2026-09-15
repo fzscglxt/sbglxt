@@ -249,6 +249,7 @@
             <div class="nav-item active" data-page="dashboard"><span class="icon">📊</span><span>数据看板</span></div>
             <div class="nav-item" data-page="equipments"><span class="icon">🖥️</span><span>设备台账</span></div>
             <div class="nav-item" data-page="spare-parts"><span class="icon">📦</span><span>设备备件清单</span></div>
+            <div class="nav-item" data-page="usage-records"><span class="icon">📤</span><span>出入库记录</span></div>
             <div class="nav-item" data-page="maintenance-plan"><span class="icon">📅</span><span>保养计划</span></div>
             <div class="nav-item" data-page="maintenance-records"><span class="icon">🛠️</span><span>保养记录</span></div>
             <div class="nav-item" data-page="repair-records"><span class="icon">⚠️</span><span>维修记录</span></div>
@@ -367,6 +368,69 @@
                 <div class="modal-footer">
                     <button class="btn btn-outline" onclick="closeModal('modal-spare-part')">取消</button>
                     <button class="btn btn-primary" onclick="saveSparePart()">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Usage Records -->
+        <div class="page" id="page-usage-records">
+            <div class="topbar"><h1>📤 出入库记录</h1><div class="topbar-actions">
+                <button class="btn btn-primary" data-need-edit onclick="openUsageForm()">➕ 新增出入库</button>
+            </div></div>
+            <div class="panel"><div class="panel-body">
+                <div class="filter-bar">
+                    <div class="search-box"><input type="text" id="usage-search" placeholder="搜索备件名称..." oninput="renderUsageTable()"></div>
+                </div>
+                <div class="table-wrap"><table><thead><tr><th>日期</th><th>备件名称</th><th>方向</th><th>数量</th><th>当前库存</th><th>领用人</th><th>备注</th><th>操作</th></tr></thead><tbody id="usage-tbody"></tbody></table></div>
+            </div></div>
+        </div>
+
+        <!-- 出入库新增/编辑弹窗 -->
+        <div class="modal-overlay" id="modal-usage">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 id="usage-modal-title">新增出入库</h3>
+                    <button class="modal-close" onclick="closeModal('modal-usage')">×</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="usage-id">
+                    <div class="form-group">
+                        <label>选择备件 *</label>
+                        <select id="usage-spare-id" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                            <option value="">-- 请选择备件 --</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>方向 *</label>
+                            <select id="usage-direction" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                                <option value="in">入库（增加库存）</option>
+                                <option value="out">出库（领用）</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>数量 *</label>
+                            <input type="number" id="usage-qty" min="1" value="1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>日期 *</label>
+                            <input type="date" id="usage-date">
+                        </div>
+                        <div class="form-group">
+                            <label>领用人</label>
+                            <input type="text" id="usage-operator" placeholder="领用人姓名">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>备注</label>
+                        <textarea id="usage-notes" placeholder="备注..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline" onclick="closeModal('modal-usage')">取消</button>
+                    <button class="btn btn-primary" onclick="saveUsage()">保存</button>
                 </div>
             </div>
         </div>
@@ -876,11 +940,13 @@ let maintenancePlans = loadData('maintenancePlans');
 let maintenanceRecords = loadData('maintenanceRecords');
 let repairRecords = loadData('repairRecords');
 let spareParts = loadData('spareParts');
+let usageRecords = loadData('usageRecords');
 function persistEquip() { saveData('equipments', equipments); markDataDirty(); }
 function persistPlans() { saveData('maintenancePlans', maintenancePlans); markDataDirty(); }
 function persistMaint() { saveData('maintenanceRecords', maintenanceRecords); markDataDirty(); }
 function persistRepairs() { saveData('repairRecords', repairRecords); markDataDirty(); }
 function persistSpareParts() { saveData('spareParts', spareParts); markDataDirty(); }
+function persistUsage() { saveData('usageRecords', usageRecords); markDataDirty(); }
 
 // ===== Users =====
 let users = loadData('users');
@@ -954,6 +1020,7 @@ function navigateTo(page) {
         if (page === 'dashboard') { renderDashboard(); startDashboardRefresh(); }
         else if (page === 'equipments') renderEquipmentTable();
         else if (page === 'spare-parts') renderSparePartsTable();
+        else if (page === 'usage-records') renderUsageTable();
         else if (page === 'maintenance-plan') renderPlanTable();
         else if (page === 'maintenance-records') renderMaintenanceTable();
         else if (page === 'repair-records') renderRepairTable();
@@ -1328,6 +1395,130 @@ function renderSparePartsTable() {
             </td>
         </tr>
     `).join('');
+    applyPermissions();
+}
+
+// ===== Usage Records CRUD =====
+function openUsageForm(id) {
+    if(id && !canEdit()){alert('没有编辑权限');return;}
+    // 填充备件下拉
+    const sel = document.getElementById('usage-spare-id');
+    sel.innerHTML = '<option value="">-- 请选择备件 --</option>' +
+        spareParts.map(s => `<option value="${s.id}">${escapeHtml(s.name)}（${escapeHtml(s.spec||'')}）当前库存:${s.stock||0}</option>`).join('');
+    document.getElementById('usage-id').value = '';
+    document.getElementById('usage-direction').value = 'out';
+    document.getElementById('usage-qty').value = 1;
+    document.getElementById('usage-date').value = todayStr();
+    document.getElementById('usage-operator').value = '';
+    document.getElementById('usage-notes').value = '';
+    if(id){
+        const r = usageRecords.find(x => x.id === id);
+        if(!r) return;
+        document.getElementById('usage-id').value = r.id;
+        document.getElementById('usage-spare-id').value = r.spareId || '';
+        document.getElementById('usage-direction').value = r.direction || 'out';
+        document.getElementById('usage-qty').value = r.qty || 1;
+        document.getElementById('usage-date').value = r.date || todayStr();
+        document.getElementById('usage-operator').value = r.operator || '';
+        document.getElementById('usage-notes').value = r.notes || '';
+        document.getElementById('usage-modal-title').textContent = '编辑出入库';
+    } else {
+        document.getElementById('usage-modal-title').textContent = '新增出入库';
+    }
+    openModal('modal-usage');
+}
+
+function saveUsage() {
+    const spareId = document.getElementById('usage-spare-id').value;
+    const direction = document.getElementById('usage-direction').value;
+    const qty = parseInt(document.getElementById('usage-qty').value) || 0;
+    const date = document.getElementById('usage-date').value;
+    const operator = document.getElementById('usage-operator').value.trim();
+    if(!spareId){alert('请选择备件');return;}
+    if(!date){alert('请选择日期');return;}
+    if(qty <= 0){alert('数量必须大于0');return;}
+    const spare = spareParts.find(s => s.id === spareId);
+    if(!spare){alert('备件不存在');return;}
+    // 出库检查库存
+    const editId = document.getElementById('usage-id').value;
+    const oldRecord = editId ? usageRecords.find(r => r.id === editId) : null;
+    let curStock = spare.stock || 0;
+    if(oldRecord && oldRecord.spareId === spareId) {
+        // 回退旧记录影响
+        const oldDelta = (oldRecord.direction === 'out') ? -oldRecord.qty : oldRecord.qty;
+        curStock -= oldDelta;
+    }
+    if(direction === 'out' && curStock < qty) {
+        alert(`库存不足！当前库存 ${curStock}，申请出库 ${qty}`); return;
+    }
+    const delta = (direction === 'out') ? -qty : qty;
+    spare.stock = curStock + delta;
+
+    const data = {
+        spareId, direction, qty, date, operator,
+        notes: document.getElementById('usage-notes').value.trim()
+    };
+    if(editId){
+        const i = usageRecords.findIndex(r => r.id === editId);
+        if(i >= 0) Object.assign(usageRecords[i], data);
+    } else {
+        data.id = uid();
+        usageRecords.push(data);
+    }
+    persistSpareParts();
+    persistUsage();
+    closeModal('modal-usage');
+    renderUsageTable();
+}
+
+function deleteUsage(id) {
+    showConfirm('确认删除该出入库记录？库存将回退。', () => {
+        const r = usageRecords.find(x => x.id === id);
+        if(r) {
+            const spare = spareParts.find(s => s.id === r.spareId);
+            if(spare) {
+                const delta = (r.direction === 'out') ? r.qty : -r.qty;
+                spare.stock = Math.max(0, (spare.stock||0) + delta);
+                persistSpareParts();
+            }
+        }
+        usageRecords = usageRecords.filter(x => x.id !== id);
+        persistUsage();
+        renderUsageTable();
+    });
+}
+
+function renderUsageTable() {
+    const kw = (document.getElementById('usage-search')?.value || '').trim().toLowerCase();
+    const list = usageRecords.filter(r => {
+        if(!kw) return true;
+        const spare = spareParts.find(s => s.id === r.spareId);
+        return (spare?.name||'').toLowerCase().includes(kw);
+    }).sort((a,b) => b.date.localeCompare(a.date));
+    const tbody = document.getElementById('usage-tbody');
+    if(list.length === 0){
+        tbody.innerHTML = '<tr><td colspan="8" class="table-empty">暂无出入库记录</td></tr>';
+        return;
+    }
+    tbody.innerHTML = list.map(r => {
+        const spare = spareParts.find(s => s.id === r.spareId);
+        const dirTag = r.direction === 'in'
+            ? '<span style="display:inline-block;padding:1px 5px;background:#34a853;color:#fff;border-radius:3px;font-size:11px;">入库</span>'
+            : '<span style="display:inline-block;padding:1px 5px;background:#ea4335;color:#fff;border-radius:3px;font-size:11px;">出库</span>';
+        return `<tr>
+            <td>${r.date}</td>
+            <td><strong>${escapeHtml(spare?.name||'已删除')}</strong></td>
+            <td>${dirTag}</td>
+            <td>${r.direction === 'out' ? '-' : '+'}${r.qty||0}</td>
+            <td>${spare ? (spare.stock||0) : '—'}</td>
+            <td>${escapeHtml(r.operator||'—')}</td>
+            <td title="${escapeHtml(r.notes||'')}">${escapeHtml(r.notes ? (r.notes.length > 15 ? r.notes.slice(0,15)+'...' : r.notes) : '—')}</td>
+            <td style="white-space:nowrap;">
+                ${canEdit() ? `<button class="btn-icon" title="编辑" onclick="openUsageForm('${r.id}')">✏</button>` : ''}
+                ${canEdit() ? `<button class="btn-icon danger" title="删除" onclick="deleteUsage('${r.id}')">🗑</button>` : ''}
+            </td>
+        </tr>`;
+    }).join('');
     applyPermissions();
 }
 
