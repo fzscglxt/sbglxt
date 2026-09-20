@@ -1103,7 +1103,7 @@ function persistUsers() { saveData('users', users); markDataDirty(); }
 function loadUsers() {
     users = loadData('users');
     if (users.length === 0 || !users.find(u => u.username === 'admin')) {
-        users = [{ id: uid(), username: 'admin', password: 'admin123', fullname: '系统管理员', role: 'admin', status: 'active', notes: '默认管理员', createdAt: new Date().toISOString(), lastLogin: null }];
+        users = [{ id: uid(), username: 'admin', password: '88888888aa', fullname: '系统管理员', role: 'admin', status: 'active', notes: '默认管理员', createdAt: new Date().toISOString(), lastLogin: null }];
         persistUsers();
     }
 }
