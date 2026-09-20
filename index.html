@@ -829,6 +829,44 @@ const cloudSync = {
 };
 window.cloudSync = cloudSync;
 
+// 应用云端拉取的数据到本地（启动时以服务器数据为准）
+function applyRemoteDB(remote) {
+    if (!remote || typeof remote !== 'object') return;
+    ['equipments', 'maintenancePlans', 'maintenanceRecords', 'repairRecords', 'users'].forEach(function (k) {
+        if (Array.isArray(remote[k])) {
+            try { localStorage.setItem(STORE_KEYS[k], JSON.stringify(remote[k])); } catch (e) {}
+        }
+    });
+    equipments = loadData('equipments');
+    maintenancePlans = loadData('maintenancePlans');
+    maintenanceRecords = loadData('maintenanceRecords');
+    repairRecords = loadData('repairRecords');
+    loadUsers();
+    var loginPage = document.getElementById('login-page');
+    var sidebarUser = document.getElementById('sidebar-user');
+    if (currentUser) {
+        var nu = users.find(function (u) { return u.id === currentUser.id && u.status === 'active'; });
+        if (!nu) {
+            try { localStorage.removeItem(STORE_KEYS.session); } catch (e) {}
+            currentUser = null;
+            if (loginPage) loginPage.style.display = 'flex';
+            if (sidebarUser) sidebarUser.style.display = 'none';
+            return;
+        }
+        currentUser = nu;
+    } else if (checkSession()) {
+        if (loginPage) loginPage.style.display = 'none';
+        try { showApp(); } catch (e) {}
+        return;
+    } else {
+        return;
+    }
+    var page = 'dashboard';
+    var act = document.querySelector('.nav-item.active');
+    if (act && act.dataset.page) page = act.dataset.page;
+    try { navigateTo(page); } catch (e) {}
+}
+
 const localBackup = {
     dirHandle: null,
     pendingHandle: null,
@@ -1060,6 +1098,7 @@ let users = loadData('users');
 let currentUser = null;
 let readAlerts = JSON.parse(localStorage.getItem(STORE_KEYS.alertsRead) || '[]');
 const ROLE_LABELS = { admin: '管理员', editor: '查看并修改', viewer: '只可查看' };
+const ROLE_BADGE = { admin: 'admin', editor: 'editor', viewer: 'viewer' };
 function persistUsers() { saveData('users', users); markDataDirty(); }
 function loadUsers() {
     users = loadData('users');
