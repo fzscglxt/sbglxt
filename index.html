@@ -708,7 +708,8 @@
 // ===== Data Layer =====
 const STORE_KEYS = {
     equipments: 'eq_ms_equipments', maintenancePlans: 'eq_ms_plans', maintenanceRecords: 'eq_ms_maintenance',
-    repairRecords: 'eq_ms_repairs', users: 'eq_ms_users', session: 'eq_ms_session', alertsRead: 'eq_ms_alerts_read'
+    repairRecords: 'eq_ms_repairs', spareParts: 'eq_ms_spare_parts', usageRecords: 'eq_ms_usage_records',
+    users: 'eq_ms_users', session: 'eq_ms_session', alertsRead: 'eq_ms_alerts_read'
 };
 function loadData(key) {
     if (window.__SOURCE_DATA__ && window.__SOURCE_DATA__[key]) {
@@ -737,6 +738,8 @@ const cloudSync = {
             maintenancePlans: get('maintenancePlans'),
             maintenanceRecords: get('maintenanceRecords'),
             repairRecords: get('repairRecords'),
+            spareParts: get('spareParts'),
+            usageRecords: get('usageRecords'),
             users: get('users')
         };
     },
@@ -832,7 +835,7 @@ window.cloudSync = cloudSync;
 // 应用云端拉取的数据到本地（启动时以服务器数据为准）
 function applyRemoteDB(remote) {
     if (!remote || typeof remote !== 'object') return;
-    ['equipments', 'maintenancePlans', 'maintenanceRecords', 'repairRecords', 'users'].forEach(function (k) {
+    ['equipments', 'maintenancePlans', 'maintenanceRecords', 'repairRecords', 'spareParts', 'usageRecords', 'users'].forEach(function (k) {
         if (Array.isArray(remote[k])) {
             try { localStorage.setItem(STORE_KEYS[k], JSON.stringify(remote[k])); } catch (e) {}
         }
@@ -841,6 +844,10 @@ function applyRemoteDB(remote) {
     maintenancePlans = loadData('maintenancePlans');
     maintenanceRecords = loadData('maintenanceRecords');
     repairRecords = loadData('repairRecords');
+    try { spareParts = loadData('spareParts'); } catch (e) {}
+    try { usageRecords = loadData('usageRecords'); } catch (e) {}
+    try { if (typeof renderSparePartsTable === 'function') renderSparePartsTable(); } catch (e) {}
+    try { if (typeof renderUsageTable === 'function') renderUsageTable(); } catch (e) {}
     loadUsers();
     var loginPage = document.getElementById('login-page');
     var sidebarUser = document.getElementById('sidebar-user');
@@ -1084,6 +1091,18 @@ let equipments = loadData('equipments');
 let maintenancePlans = loadData('maintenancePlans');
 let maintenanceRecords = loadData('maintenanceRecords');
 let repairRecords = loadData('repairRecords');
+(function migrateLegacySpareData(){
+    try {
+        var raw = localStorage.getItem('undefined');
+        if (!raw) return;
+        var arr = null; try { arr = JSON.parse(raw); } catch (e3) { arr = null; }
+        if (!Array.isArray(arr) || !arr.length) { try { localStorage.removeItem('undefined'); } catch (e4) {} return; }
+        var allUsage = arr.every(function(x){ return x && Object.prototype.hasOwnProperty.call(x, 'spareId'); });
+        var allSpare = arr.every(function(x){ return x && ('name' in x) && !('spareId' in x); });
+        if (allUsage) { if (!localStorage.getItem('eq_ms_usage_records')) localStorage.setItem('eq_ms_usage_records', JSON.stringify(arr)); localStorage.removeItem('undefined'); }
+        else if (allSpare) { if (!localStorage.getItem('eq_ms_spare_parts')) localStorage.setItem('eq_ms_spare_parts', JSON.stringify(arr)); localStorage.removeItem('undefined'); }
+    } catch (e) {}
+})();
 let spareParts = loadData('spareParts');
 let usageRecords = loadData('usageRecords');
 function persistEquip() { saveData('equipments', equipments); markDataDirty(); }
