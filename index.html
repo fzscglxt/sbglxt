@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -91,8 +91,9 @@
         .panel-body { padding: 20px; }
         .table-wrap { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { text-align: left; padding: 10px 12px; background: #f8f9fa; border-bottom: 2px solid var(--border-light); color: var(--text-secondary); font-weight: 600; white-space: nowrap; position: sticky; top: 0; }
-        td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); white-space: nowrap; }
+        th { text-align: center; padding: 10px 12px; background: #f8f9fa; border-bottom: 2px solid var(--border-light); color: var(--text-secondary); font-weight: 600; white-space: nowrap; position: sticky; top: 0; }
+        td { text-align: center; padding: 10px 12px; border-bottom: 1px solid var(--border-light); white-space: nowrap; }
+        td.cell-left { text-align: left; }
         tbody tr:hover { background: #f8f9ff; }
         .table-empty { text-align: center; padding: 40px; color: var(--text-tertiary); }
         .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
@@ -1625,7 +1626,7 @@ function renderEquipmentTable(){
     const pd=d.slice((equipPage-1)*EQ_PZ,equipPage*EQ_PZ);
     const tb=document.getElementById('equip-tbody');
     tb.innerHTML = pd.length? pd.map(e=>`<tr>
-        <td><strong>${escapeHtml(e.code)}</strong></td><td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.workshop)}</td>
+        <td><strong>${escapeHtml(e.code)}</strong></td><td class="cell-left">${escapeHtml(e.name)}</td><td>${escapeHtml(e.workshop)}</td>
         <td>${escapeHtml(e.supplier||'-')}</td><td>${statusBadge(e.status)}</td><td>${escapeHtml(e.owner||'-')}</td>
         <td>${escapeHtml(e.madeDate||'-')}</td>
         <td><div class="action-btns">
@@ -1687,7 +1688,7 @@ function renderPlanTable(){
         const {eq,nd,dl}=getPlanInfo(p);if(!eq)return '';
         let dc='days-normal';
         if(dl===null)dc='';else if(dl<0)dc='days-overdue';else if(dl<=7)dc='days-urgent';else if(dl<=15)dc='days-warning';
-        return `<tr><td><strong>${escapeHtml(eq.code)}</strong></td><td>${escapeHtml(eq.name)}</td><td>${escapeHtml(p.type)}</td><td>${p.interval}天</td>
+        return `<tr><td><strong>${escapeHtml(eq.code)}</strong></td><td class="cell-left">${escapeHtml(eq.name)}</td><td>${escapeHtml(p.type)}</td><td>${p.interval}天</td>
         <td>${escapeHtml(p.lastDate||'-')}</td><td>${escapeHtml(nd||'-')}</td>
         <td class="${dc}">${dl===null?'-':(dl<0?'逾期'+Math.abs(dl)+'天':dl+'天')}</td>
         <td>${dl===null?'<span class="badge badge-warning">待执行</span>':planStatusBadge(dl)}</td>
@@ -1982,7 +1983,7 @@ function renderMaintenanceTable(){
     }).sort((a,b)=>b.date.localeCompare(a.date));
     document.getElementById('maint-tbody').innerHTML=list.length? list.map(r=>{
         const eq=getEquipment(r.equipmentId);
-        return `<tr><td>${escapeHtml(r.date)}</td><td><strong>${escapeHtml(eq.code)}</strong></td><td>${escapeHtml(eq.name)}</td>
+        return `<tr><td>${escapeHtml(r.date)}</td><td><strong>${escapeHtml(eq.code)}</strong></td><td class="cell-left">${escapeHtml(eq.name)}</td>
         <td>${escapeHtml(r.type)}</td><td title="${escapeHtml(r.content||'')}">${escapeHtml((r.content||'').slice(0,25))}</td>
         <td>${r.photo?'<img src="'+r.photo+'" style="width:48px;height:48px;object-fit:cover;border-radius:4px;cursor:pointer;border:1px solid #e0e0e0;" onclick="showMaintPhotoPreview(\''+r.photo+'\')">':'—'}</td>
         <td title="${escapeHtml(r.parts||'')}">${escapeHtml((r.parts||'-').slice(0,20))}</td>
@@ -2030,7 +2031,7 @@ function renderRepairTable(){
     }).sort((a,b)=>b.date.localeCompare(a.date));
     document.getElementById('repair-tbody').innerHTML=list.length? list.map(r=>{
         const eq=getEquipment(r.equipmentId);
-        return `<tr><td>${escapeHtml(r.date)}</td><td><strong>${escapeHtml(eq.code)}</strong></td><td>${escapeHtml(eq.name)}</td>
+        return `<tr><td>${escapeHtml(r.date)}</td><td><strong>${escapeHtml(eq.code)}</strong></td><td class="cell-left">${escapeHtml(eq.name)}</td>
         <td title="${escapeHtml(r.fault||'')}">${escapeHtml((r.fault||'').slice(0,20))}</td>
         <td title="${escapeHtml(r.cause||'')}">${escapeHtml((r.cause||'-').slice(0,15))}</td>
         <td title="${escapeHtml(r.content||'')}">${escapeHtml((r.content||'').slice(0,20))}</td>
@@ -2070,7 +2071,7 @@ function renderReportTable(){
     const list=equipments.filter(e=>!kw||(e.code+' '+e.name).toLowerCase().includes(kw));
     document.getElementById('report-tbody').innerHTML=list.length? list.map(e=>{
         const s=getEquipmentStats(e.id);
-        return `<tr><td><strong>${escapeHtml(e.code)}</strong></td><td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.workshop)}</td><td>${statusBadge(e.status)}</td>
+        return `<tr><td><strong>${escapeHtml(e.code)}</strong></td><td class="cell-left">${escapeHtml(e.name)}</td><td>${escapeHtml(e.workshop)}</td><td>${statusBadge(e.status)}</td>
         <td style="text-align:center">${s.maintCount}</td><td style="text-align:center">${s.repairCount}</td>
         <td class="cost-positive">¥${formatMoney(s.totalRepairCost)}</td>
         <td>${escapeHtml(s.lastMaint||'-')}</td><td>${escapeHtml(s.lastRepair||'-')}</td></tr>`;
