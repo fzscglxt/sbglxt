@@ -2235,7 +2235,9 @@ window.addEventListener('DOMContentLoaded', () => {
     if (window.cloudSync) { try { cloudSync.initOnLoad(); } catch(e) { console.warn(e); } }
     if (window.localBackup) { try { localBackup.init(); } catch(e) { console.warn(e); } }
     loadUsers();
-    if (!checkSession() && isKioskMode()) kioskLogin();
+    checkSession();
+    // 大屏 kiosk：检测到 kiosk 参数即无条件强制只读 viewer（覆盖任何残留/历史会话，保证大屏永远只读）
+    if (isKioskMode()) kioskLogin();
     if (currentUser) {
         document.getElementById('login-page').style.display = 'none';
         showApp();
