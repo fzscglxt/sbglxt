@@ -1729,7 +1729,7 @@ function getFilteredPlans(){
     const kw=((document.getElementById('plan-search')||{}).value||'').trim().toLowerCase();
     let list=maintenancePlans.filter(p=>{const eq=getEquipment(p.equipmentId);if(!eq)return false;return !kw||(eq.code+' '+eq.name).toLowerCase().includes(kw);});
     if(currentPlanTab==='upcoming') list=list.filter(p=>{const {dl}=getPlanInfo(p);return dl!==null&&dl<=15;});
-    list.sort((a,b)=>{const da=getPlanInfo(a).(dl!=null?dl:99999), db=getPlanInfo(b).(dl!=null?dl:99999);return da-db;});
+    list.sort((a,b)=>{const da=(getPlanInfo(a).dl!=null?getPlanInfo(a).dl:99999), db=(getPlanInfo(b).dl!=null?getPlanInfo(b).dl:99999);return da-db;});
     return list;
 }
 function renderPlanTable(){
