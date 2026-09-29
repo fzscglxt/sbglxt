@@ -1514,7 +1514,7 @@ function getEquipment(id){return equipments.find(e=>e.id===id);}
 
 function renderDashboard() {
     document.getElementById('dashboard-date').textContent = new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
-    const rt = (document.getElementById('dashboard-time-range')||{}).value || '6m';
+    const rt = document.getElementById('dashboard-time-range')?.value || '6m';
     const fms = getMonthsByTimeRange(rt), mym = fms.map(m=>m.yyyymm);
     const fm = maintenanceRecords.filter(r=>mym.some(m=>r.date.startsWith(m)));
     const fr = repairRecords.filter(r=>mym.some(m=>r.date.startsWith(m)));
@@ -1641,16 +1641,16 @@ function viewEquipment(id){
 function deleteEquipment(id){
     if(!canEdit()){alert('没有编辑权限');return;}
     const e=equipments.find(x=>x.id===id);
-    showConfirm(`确认删除设备"${(e||{}).code}-${(e||{}).name}"？相关保养计划一并删除。`,()=>{
+    showConfirm(`确认删除设备"${e?.code}-${e?.name}"？相关保养计划一并删除。`,()=>{
         equipments=equipments.filter(x=>x.id!==id);
         maintenancePlans=maintenancePlans.filter(p=>p.equipmentId!==id);
         persistEquip();persistPlans();renderEquipmentTable();updateAlertBadge();
     });
 }
 function getFilteredEquipments(){
-    const kw=((document.getElementById('equip-search')||{}).value||'').trim().toLowerCase();
-    const ws=(document.getElementById('equip-filter-workshop')||{}).value||'';
-    const st=(document.getElementById('equip-filter-status')||{}).value||'';
+    const kw=(document.getElementById('equip-search')?.value||'').trim().toLowerCase();
+    const ws=document.getElementById('equip-filter-workshop')?.value||'';
+    const st=document.getElementById('equip-filter-status')?.value||'';
     return equipments.filter(e=>(!ws||e.workshop===ws)&&(!st||e.status===st)&&(!kw||(e.code+' '+e.name).toLowerCase().includes(kw)));
 }
 function renderPagination(cid, cur, tp, tc, ps, fn){
@@ -1726,10 +1726,10 @@ function executePlanMaintenance(pid){
 }
 function deletePlan(id){if(!canEdit()){alert('没有编辑权限');return;}showConfirm('删除该计划？',()=>{maintenancePlans=maintenancePlans.filter(p=>p.id!==id);persistPlans();renderPlanTable();updateAlertBadge();});}
 function getFilteredPlans(){
-    const kw=((document.getElementById('plan-search')||{}).value||'').trim().toLowerCase();
+    const kw=(document.getElementById('plan-search')?.value||'').trim().toLowerCase();
     let list=maintenancePlans.filter(p=>{const eq=getEquipment(p.equipmentId);if(!eq)return false;return !kw||(eq.code+' '+eq.name).toLowerCase().includes(kw);});
     if(currentPlanTab==='upcoming') list=list.filter(p=>{const {dl}=getPlanInfo(p);return dl!==null&&dl<=15;});
-    list.sort((a,b)=>{const da=getPlanInfo(a).(dl!=null?dl:99999), db=getPlanInfo(b).(dl!=null?dl:99999);return da-db;});
+    list.sort((a,b)=>{const da=getPlanInfo(a).dl??99999, db=getPlanInfo(b).dl??99999;return da-db;});
     return list;
 }
 function renderPlanTable(){
@@ -1808,7 +1808,7 @@ function deleteSparePart(id) {
 }
 
 function renderSparePartsTable() {
-    const kw = ((document.getElementById('spare-search')||{}).value || '').trim().toLowerCase();
+    const kw = (document.getElementById('spare-search')?.value || '').trim().toLowerCase();
     const list = spareParts.filter(r => !kw ||
         (r.name || '').toLowerCase().includes(kw) ||
         (r.machine || '').toLowerCase().includes(kw)
@@ -1926,11 +1926,11 @@ function deleteUsage(id) {
 }
 
 function renderUsageTable() {
-    const kw = ((document.getElementById('usage-search')||{}).value || '').trim().toLowerCase();
+    const kw = (document.getElementById('usage-search')?.value || '').trim().toLowerCase();
     const list = usageRecords.filter(r => {
         if(!kw) return true;
         const spare = spareParts.find(s => s.id === r.spareId);
-        return ((spare||{}).name||'').toLowerCase().includes(kw);
+        return (spare?.name||'').toLowerCase().includes(kw);
     }).sort((a,b) => b.date.localeCompare(a.date));
     const tbody = document.getElementById('usage-tbody');
     if(list.length === 0){
@@ -1944,7 +1944,7 @@ function renderUsageTable() {
             : '<span style="display:inline-block;padding:1px 5px;background:#ea4335;color:#fff;border-radius:3px;font-size:11px;">出库</span>';
         return `<tr>
             <td>${r.date}</td>
-            <td><strong>${escapeHtml((spare||{}).name||'已删除')}</strong></td>
+            <td><strong>${escapeHtml(spare?.name||'已删除')}</strong></td>
             <td>${dirTag}</td>
             <td>${r.direction === 'out' ? '-' : '+'}${r.qty||0}</td>
             <td>${spare ? (spare.stock||0) : '—'}</td>
@@ -1998,7 +1998,7 @@ function openMaintenanceForm(id, preEq, preType){
     document.getElementById('maint-type').value=preType||'日常保养';
     document.getElementById('maint-cost').value=0;document.getElementById('maint-result').value='正常';
     if(id){const r=maintenanceRecords.find(x=>x.id===id);if(!r)return;
-        Object.entries({id:'maint-id',equipmentId:'maint-equipment',date:'maint-date',type:'maint-type',cost:'maint-cost',content:'maint-content',parts:'maint-parts',worker:'maint-worker',result:'maint-result',notes:'maint-notes'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=(r[k]!=null?r[k]:'');});
+        Object.entries({id:'maint-id',equipmentId:'maint-equipment',date:'maint-date',type:'maint-type',cost:'maint-cost',content:'maint-content',parts:'maint-parts',worker:'maint-worker',result:'maint-result',notes:'maint-notes'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=r[k]??'';});
         if(r.photo){
             document.getElementById('maint-photo').value=r.photo;
             document.getElementById('maint-photo-preview').innerHTML=
@@ -2025,7 +2025,7 @@ function saveMaintenance(){
 }
 function deleteMaintenance(id){if(!canEdit()){alert('没有编辑权限');return;}showConfirm('删除该记录？',()=>{maintenanceRecords=maintenanceRecords.filter(r=>r.id!==id);persistMaint();renderMaintenanceTable();updateAlertBadge();});}
 function renderMaintenanceTable(){
-    const kw=((document.getElementById('maint-search')||{}).value||'').trim().toLowerCase(), tp=(document.getElementById('maint-filter-type')||{}).value||'';
+    const kw=(document.getElementById('maint-search')?.value||'').trim().toLowerCase(), tp=document.getElementById('maint-filter-type')?.value||'';
     const list=maintenanceRecords.filter(r=>{
         const eq=getEquipment(r.equipmentId);if(!eq)return false;
         if(tp&&r.type!==tp)return false;
@@ -2056,7 +2056,7 @@ function openRepairForm(id){
     document.getElementById('repair-level').value='一般';
     document.getElementById('repair-cost').value=0;document.getElementById('repair-downtime').value=0;
     if(id){const r=repairRecords.find(x=>x.id===id);if(!r)return;
-        Object.entries({id:'repair-id',equipmentId:'repair-equipment',date:'repair-date',level:'repair-level',cost:'repair-cost',downtime:'repair-downtime',fault:'repair-fault',cause:'repair-cause',content:'repair-content',parts:'repair-parts',worker:'repair-worker',notes:'repair-notes'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=(r[k]!=null?r[k]:'');});
+        Object.entries({id:'repair-id',equipmentId:'repair-equipment',date:'repair-date',level:'repair-level',cost:'repair-cost',downtime:'repair-downtime',fault:'repair-fault',cause:'repair-cause',content:'repair-content',parts:'repair-parts',worker:'repair-worker',notes:'repair-notes'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=r[k]??'';});
         document.getElementById('repair-modal-title').textContent='编辑维修记录';
     } else document.getElementById('repair-modal-title').textContent='新增维修记录';
     openModal('modal-repair');
@@ -2073,7 +2073,7 @@ function saveRepair(){
 }
 function deleteRepair(id){if(!canEdit()){alert('没有编辑权限');return;}showConfirm('删除该记录？',()=>{repairRecords=repairRecords.filter(r=>r.id!==id);persistRepairs();renderRepairTable();updateAlertBadge();});}
 function renderRepairTable(){
-    const kw=((document.getElementById('repair-search')||{}).value||'').trim().toLowerCase(), lv=(document.getElementById('repair-filter-level')||{}).value||'';
+    const kw=(document.getElementById('repair-search')?.value||'').trim().toLowerCase(), lv=document.getElementById('repair-filter-level')?.value||'';
     const list=repairRecords.filter(r=>{
         const eq=getEquipment(r.equipmentId);if(!eq)return false;
         if(lv&&r.level!==lv)return false;
@@ -2117,7 +2117,7 @@ function getEquipmentStats(eqId){
     };
 }
 function renderReportTable(){
-    const kw=((document.getElementById('report-search')||{}).value||'').trim().toLowerCase();
+    const kw=(document.getElementById('report-search')?.value||'').trim().toLowerCase();
     const list=equipments.filter(e=>!kw||(e.code+' '+e.name).toLowerCase().includes(kw));
     document.getElementById('report-tbody').innerHTML=list.length? list.map(e=>{
         const s=getEquipmentStats(e.id);
@@ -2148,12 +2148,12 @@ function exportPlansExcel(){
     download(`保养计划_${todayStr()}.csv`, toCSV(['设备编号','设备名称','保养类型','间隔','上次保养日期','预计下次','剩余天数'], rows));
 }
 function exportMaintenanceExcel(){
-    const kw=((document.getElementById('maint-search')||{}).value||'').trim().toLowerCase(), tp=(document.getElementById('maint-filter-type')||{}).value||'';
+    const kw=(document.getElementById('maint-search')?.value||'').trim().toLowerCase(), tp=document.getElementById('maint-filter-type')?.value||'';
     const d=maintenanceRecords.filter(r=>{const eq=getEquipment(r.equipmentId);if(!eq)return false;if(tp&&r.type!==tp)return false;return !kw||(eq.code+' '+eq.name).toLowerCase().includes(kw);});
     download(`保养记录_${todayStr()}.csv`, toCSV(['日期','设备编号','设备名称','类型','内容','更换配件','费用(元)','执行人','结果','备注'], d.map(r=>{const eq=getEquipment(r.equipmentId);return [r.date,eq?eq.code:'',eq?eq.name:'',r.type,r.content||'',r.parts||'',r.cost||0,r.worker||'',r.result||'',r.notes||''];})));
 }
 function exportRepairExcel(){
-    const kw=((document.getElementById('repair-search')||{}).value||'').trim().toLowerCase(), lv=(document.getElementById('repair-filter-level')||{}).value||'';
+    const kw=(document.getElementById('repair-search')?.value||'').trim().toLowerCase(), lv=document.getElementById('repair-filter-level')?.value||'';
     const d=repairRecords.filter(r=>{const eq=getEquipment(r.equipmentId);if(!eq)return false;if(lv&&r.level!==lv)return false;return !kw||(eq.code+' '+eq.name).toLowerCase().includes(kw);});
     download(`维修记录_${todayStr()}.csv`, toCSV(['日期','设备编号','设备名称','级别','故障描述','原因','维修内容','更换配件','费用(元)','停机(h)','维修人','备注'], d.map(r=>{const eq=getEquipment(r.equipmentId);return [r.date,eq?eq.code:'',eq?eq.name:'',r.level,r.fault||'',r.cause||'',r.content||'',r.parts||'',r.cost||0,r.downtime||0,r.worker||'',r.notes||''];})));
 }
@@ -2162,7 +2162,7 @@ function exportAlertsExcel(){
     download(`预警提醒_${todayStr()}.csv`, toCSV(['类型','级别','标题','详情'], d.map(a=>[a.type,a.level,a.title,a.desc])));
 }
 function exportReportExcel(){
-    const kw=((document.getElementById('report-search')||{}).value||'').trim().toLowerCase();
+    const kw=(document.getElementById('report-search')?.value||'').trim().toLowerCase();
     const d=equipments.filter(e=>!kw||(e.code+' '+e.name).toLowerCase().includes(kw));
     download(`设备综合报表_${todayStr()}.csv`, toCSV(['设备编号','名称','车间','状态','保养次数','维修次数','维修总费用(元)','上次保养','上次维修'], d.map(e=>{const s=getEquipmentStats(e.id);return [e.code,e.name,e.workshop,e.status,s.maintCount,s.repairCount,s.totalRepairCost,s.lastMaint||'',s.lastRepair||''];})));
 }
@@ -2190,7 +2190,7 @@ function openUserForm(id){
     ['user-edit-id','user-username','user-fullname','user-password','user-password2','user-notes'].forEach(x=>document.getElementById(x).value='');
     document.getElementById('user-role').value='viewer';document.getElementById('user-status').value='active';
     if(id){const u=users.find(x=>x.id===id);if(!u)return;
-        Object.entries({id:'user-edit-id',username:'user-username',fullname:'user-fullname',password:'user-password',role:'user-role',status:'user-status',notes:'user-notes'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=(u[k]!=null?u[k]:'');});
+        Object.entries({id:'user-edit-id',username:'user-username',fullname:'user-fullname',password:'user-password',role:'user-role',status:'user-status',notes:'user-notes'}).forEach(([k,v])=>{if(document.getElementById(v))document.getElementById(v).value=u[k]??'';});
         document.getElementById('user-password2').value=u.password||'';
         document.getElementById('user-modal-title').textContent='编辑用户';
     } else document.getElementById('user-modal-title').textContent='新增用户';
@@ -2212,7 +2212,7 @@ function saveUser(){
 function deleteUser(id){
     if(id===currentUser.id){alert('不能删除当前用户');return;}
     const u=users.find(x=>x.id===id);
-    showConfirm(`确认删除用户"${(u||{}).fullname}"？`,()=>{users=users.filter(x=>x.id!==id);persistUsers();renderUserTable();});
+    showConfirm(`确认删除用户"${u?.fullname}"？`,()=>{users=users.filter(x=>x.id!==id);persistUsers();renderUserTable();});
 }
 function toggleUserStatus(id){
     if(id===currentUser.id){alert('不能禁用当前用户');return;}
@@ -2222,7 +2222,7 @@ function toggleUserStatus(id){
 function renderUserTable(){
     const tbody=document.getElementById('user-tbody');
     tbody.innerHTML=users.length? users.map(u=>{
-        const isSelf=u.id===(currentUser||{}).id;
+        const isSelf=u.id===currentUser?.id;
         return `<tr><td><strong>${escapeHtml(u.username)}</strong>${isSelf?' <span class="badge badge-normal" style="font-size:10px">当前</span>':''}</td>
         <td>${escapeHtml(u.fullname)}</td><td><span class="role-badge ${ROLE_BADGE[u.role]||''}">${ROLE_LABELS[u.role]||u.role}</span></td>
         <td>${escapeHtml(u.role)}</td>
@@ -2249,8 +2249,8 @@ window.addEventListener('DOMContentLoaded', () => {
         document.getElementById('login-page').style.display = 'none';
         showApp();
     }
-    (document.getElementById('login-password')||{}).addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
-    (document.getElementById('login-username')||{}).addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+    document.getElementById('login-password')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+    document.getElementById('login-username')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
 });
 </script>
 </body>
