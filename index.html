@@ -1168,6 +1168,7 @@ function saveData(key, data) { localStorage.setItem(STORE_KEYS[key], JSON.string
 const CLOUD_CONFIG = { apiBase: '' };
 const cloudSync = {
     version: 0, ready: false, pushTimer: null, pollingTimer: null,
+    bootstrapped: false, // 启动引导是否完成：首次成功拉取云端最新前，禁止自动推送，避免旧数据覆盖云端
     isCloudConfigured: function() {
         if (CLOUD_CONFIG.apiBase === '') return true;
         return /^https?:\/\//.test(CLOUD_CONFIG.apiBase);
@@ -1212,9 +1213,10 @@ const cloudSync = {
             return 'error';
         } catch(e) { console.warn('cloud push', e); this.setStatus('err'); this.ready = false; return 'error'; }
     },
-    // 自动上云权限：大屏只读/查看员不推
+    // 自动上云权限：大屏只读/查看员不推；首次成功拉取云端最新前（启动/登录阶段）也不推
     canAutoWrite: function() {
         if (!this.isCloudConfigured()) return false;
+        if (!this.bootstrapped) return false;
         const u = (typeof currentUser !== 'undefined') ? currentUser : null;
         if (u && (u.kiosk || u.role === 'viewer')) return false;
         return true;
@@ -1296,21 +1298,32 @@ const cloudSync = {
         if (!this.isCloudConfigured()) return;
         try {
             const remote = await this.pull();
-            if (!remote || !remote.db || !remote.db.equipments) { this.ready = true; return; }
+            if (!remote || !remote.db || !remote.db.equipments) {
+                // 云端暂无数据：不推送本地（演示/旧）数据，直接完成引导，等用户真正编辑时再上云
+                this.ready = true; this.bootstrapped = true;
+                return;
+            }
             const remoteVer = remote.version || 0;
-            
+
             // 总是以服务器数据为准，直接应用
             this.version = remoteVer; this.ready = true;
             localStorage.setItem('eq_cloud_ver', String(remoteVer));
             this.setStatus('ok');
             this.startPolling();
-            
-            // 应用服务器数据到本地
+
+            // 应用服务器数据到本地（applyRemoteDB 内含 loadUsers/渲染，期间 bootstrapped 仍为 false，不会回推）
             if (typeof applyRemoteDB === 'function') {
                 applyRemoteDB(remote.db);
             }
+            // 云端最新已覆盖本地：引导完成，打开自动推送并清掉启动阶段（默认建 admin/迁移）残留的改动标记
+            this.bootstrapped = true;
+            this.autoDirty = false;
+            if (this.pushTimer) { clearTimeout(this.pushTimer); this.pushTimer = null; }
+            if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
         } catch(e) {
             console.warn('cloud init error', e);
+            // 断网兜底：本机曾成功同步过（eq_cloud_ver 存在）则视为已引导，允许离线编辑、恢复后重推；首次即断网保持未引导
+            if (localStorage.getItem('eq_cloud_ver')) this.bootstrapped = true;
         }
     },
     startPolling: function() {
@@ -1696,7 +1709,11 @@ window.handleLogin = function() {
     if (!user || user.password !== p) { err.textContent = '用户名或密码错误'; err.classList.add('show'); return; }
     if (user.status !== 'active') { err.textContent = '账号已禁用'; err.classList.add('show'); return; }
     localStorage.setItem(STORE_KEYS.session, JSON.stringify({ userId: user.id, time: Date.now() }));
-    user.lastLogin = new Date().toISOString(); persistUsers(); currentUser = user;
+    user.lastLogin = new Date().toISOString();
+    // 登录仅把登录时间写入本地，不调 persistUsers/saveData，避免登录瞬间把本地整库推上云、旧数据覆盖云端；
+    // 云端登录时间由下方 syncLoginTime 基于“拉取远端→只改该用户 lastLogin→回写”的安全通道合并
+    try { localStorage.setItem(STORE_KEYS.users, JSON.stringify(users)); } catch (e) {}
+    currentUser = user;
     try { cloudSync.syncLoginTime(user.username); } catch (e) {}
     document.getElementById('login-page').style.display = 'none'; showApp();
 };
