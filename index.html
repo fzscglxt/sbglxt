@@ -786,7 +786,7 @@ input[type=file]::file-selector-button:hover{background:var(--primary-light);col
                 <div class="filter-bar">
                     <div class="search-box"><input type="text" id="spare-search" placeholder="搜索备件名称 / 适用设备..." oninput="renderSparePartsTable()"></div>
                 </div>
-                <div class="table-wrap"><table><thead><tr><th>备件名称</th><th>备件规格</th><th>适用设备</th><th>设备编号</th><th>供应商</th><th>库存</th><th>操作</th></tr></thead><tbody id="spare-tbody"></tbody></table></div>
+                <div class="table-wrap"><table><thead><tr><th>备件名称</th><th>备件规格</th><th>适用设备</th><th>设备编号</th><th>供应商</th><th>安全库存</th><th>库存</th><th>操作</th></tr></thead><tbody id="spare-tbody"></tbody></table></div>
             </div></div>
         </div>
 
@@ -805,6 +805,7 @@ input[type=file]::file-selector-button:hover{background:var(--primary-light);col
                     <div class="form-group"><label>设备编号</label><input type="text" id="spare-machine-model"></div>
                     <div class="form-group"><label>供应商</label><input type="text" id="spare-supplier"></div>
                     <div class="form-group"><label>库存数量</label><input type="number" id="spare-stock" min="0" value="0"></div>
+                    <div class="form-group"><label>安全库存（实际库存低于此值预警）</label><input type="number" id="spare-safety-stock" min="0" value="0"></div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-outline" onclick="closeModal('modal-spare-part')">取消</button>
@@ -937,6 +938,7 @@ input[type=file]::file-selector-button:hover{background:var(--primary-light);col
                     <div class="tab active" data-alert-tab="all" onclick="switchAlertTab('all')">全部预警</div>
                     <div class="tab" data-alert-tab="maintenance" onclick="switchAlertTab('maintenance')">保养到期</div>
                     <div class="tab" data-alert-tab="repair" onclick="switchAlertTab('repair')">维修预警</div>
+                    <div class="tab" data-alert-tab="spare" onclick="switchAlertTab('spare')">备件预警</div>
                 </div>
                 <div id="alerts-list"></div>
             </div></div>
@@ -1866,6 +1868,11 @@ function generateAlerts() {
             a.push({id:'rep_hi_'+r.id,type:'repair',level:r.level==='紧急'?'danger':'warning',icon:r.level==='紧急'?'🚨':'⚡',title:`高风险维修：${eq.code} - ${eq.name}`,desc:`【${r.level}】${(r.fault||'').slice(0,50)}，费用：¥${formatMoney(r.cost)}`,relatedId:r.id});
     });
     equipments.forEach(e=>{if(e.status==='待保养')a.push({id:'eq_pend_'+e.id,type:'maintenance',level:'warning',icon:'⏰',title:`待保养：${e.code} - ${e.name}`,desc:`车间：${e.workshop}，负责人：${e.owner||'未分配'}`,relatedId:e.id});});
+    spareParts.forEach(s=>{
+        const safety=Number(s.safetyStock)||0, stock=Number(s.stock)||0;
+        if(safety>0 && stock<safety)
+            a.push({id:'spare_low_'+s.id,type:'spare',level:'warning',icon:'📦',title:`备件库存不足：${s.name}${s.spec?'（'+s.spec+'）':''}`,desc:`当前库存 ${stock}，安全库存 ${safety}，请及时补货${s.supplier?'（供应商：'+s.supplier+'）':''}`,relatedId:s.id});
+    });
     const rk={danger:0,warning:1,info:2};
     a.sort((x,y)=>(rk[x.level]||0)-(rk[y.level]||0));
     return a;
@@ -1885,11 +1892,12 @@ function renderAlerts(){
         const rd=readAlerts.includes(a.id);
         return `<div class="alert-item ${a.level}" style="opacity:${rd?0.65:1}"><div class="alert-icon">${a.icon}</div>
         <div class="alert-content"><div class="alert-title">${escapeHtml(a.title)}${rd?' <span class="badge" style="background:#f1f3f4;color:#5f6368;margin-left:8px;font-size:10px">已读</span>':''}</div><div class="alert-desc">${escapeHtml(a.desc)}</div></div>
-        <div class="alert-action">${a.type==='maintenance'?`<button class="btn btn-sm btn-primary" onclick="handleAlertAction('${a.type}','${a.relatedId}')">处理</button>`:''}</div></div>`;
+        <div class="alert-action">${a.type==='maintenance'||a.type==='spare'?`<button class="btn btn-sm btn-primary" onclick="handleAlertAction('${a.type}','${a.relatedId}')">处理</button>`:''}</div></div>`;
     }).join('') : '<div style="text-align:center;padding:50px;color:#9aa0a6">🎉 暂无预警</div>';
 }
 function handleAlertAction(type, rid){
     if(type==='maintenance'){ const p=maintenancePlans.find(x=>x.id===rid); if(p) openMaintenanceForm(null, p.equipmentId, p.type); }
+    else if(type==='spare'){ openSparePartForm(rid); }
 }
 
 // ===== Equipment CRUD =====
@@ -2058,6 +2066,7 @@ function openSparePartForm(id) {
     document.getElementById('spare-id').value = '';
     ['spare-name','spare-spec','spare-machine','spare-machine-model','spare-supplier'].forEach(i => document.getElementById(i).value = '');
     document.getElementById('spare-stock').value = 0;
+    document.getElementById('spare-safety-stock').value = 0;
     if(id){
         const r = spareParts.find(x => x.id === id);
         if(!r) return;
@@ -2068,6 +2077,7 @@ function openSparePartForm(id) {
         document.getElementById('spare-machine-model').value = r.machineModel || '';
         document.getElementById('spare-supplier').value = r.supplier || '';
         document.getElementById('spare-stock').value = r.stock || 0;
+        document.getElementById('spare-safety-stock').value = r.safetyStock || 0;
         document.getElementById('spare-modal-title').textContent = '编辑备件';
     } else {
         document.getElementById('spare-modal-title').textContent = '新增备件';
@@ -2084,7 +2094,8 @@ function saveSparePart() {
         machine: document.getElementById('spare-machine').value.trim(),
         machineModel: document.getElementById('spare-machine-model').value.trim(),
         supplier: document.getElementById('spare-supplier').value.trim(),
-        stock: Number(document.getElementById('spare-stock').value) || 0
+        stock: Number(document.getElementById('spare-stock').value) || 0,
+        safetyStock: Number(document.getElementById('spare-safety-stock').value) || 0
     };
     const editId = document.getElementById('spare-id').value;
     if(editId){
@@ -2097,6 +2108,7 @@ function saveSparePart() {
     persistSpareParts();
     closeModal('modal-spare-part');
     renderSparePartsTable();
+    updateAlertBadge();
 }
 
 function deleteSparePart(id) {
@@ -2104,6 +2116,7 @@ function deleteSparePart(id) {
         spareParts = spareParts.filter(x => x.id !== id);
         persistSpareParts();
         renderSparePartsTable();
+        updateAlertBadge();
     });
 }
 
@@ -2115,23 +2128,28 @@ function renderSparePartsTable() {
     );
     const tbody = document.getElementById('spare-tbody');
     if(list.length === 0){
-        tbody.innerHTML = '<tr><td colspan="7" class="table-empty">暂无备件数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="table-empty">暂无备件数据</td></tr>';
         return;
     }
-    tbody.innerHTML = list.map(r => `
+    tbody.innerHTML = list.map(r => {
+        const safety = Number(r.safetyStock) || 0, stock = Number(r.stock) || 0;
+        const low = safety > 0 && stock < safety;
+        return `
         <tr>
             <td><strong>${escapeHtml(r.name||'')}</strong></td>
             <td>${escapeHtml(r.spec||'—')}</td>
             <td>${escapeHtml(r.machine||'—')}</td>
             <td>${escapeHtml(r.machineModel||'—')}</td>
             <td>${escapeHtml(r.supplier||'—')}</td>
-            <td style="font-weight:600;">${r.stock||0}</td>
+            <td>${safety || '—'}</td>
+            <td style="font-weight:600;">${stock}${low ? ' <span class="badge badge-danger">低于安全库存</span>' : ''}</td>
             <td style="white-space:nowrap;">
                 ${canEdit() ? `<button class="btn-icon" title="编辑" onclick="openSparePartForm('${r.id}')">✏</button>` : ''}
                 ${canEdit() ? `<button class="btn-icon danger" title="删除" onclick="deleteSparePart('${r.id}')">🗑</button>` : ''}
             </td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
     applyPermissions();
 }
 
@@ -2206,6 +2224,8 @@ function saveUsage() {
     persistUsage();
     closeModal('modal-usage');
     renderUsageTable();
+    renderSparePartsTable();
+    updateAlertBadge();
 }
 
 function deleteUsage(id) {
@@ -2222,6 +2242,8 @@ function deleteUsage(id) {
         usageRecords = usageRecords.filter(x => x.id !== id);
         persistUsage();
         renderUsageTable();
+        renderSparePartsTable();
+        updateAlertBadge();
     });
 }
 
